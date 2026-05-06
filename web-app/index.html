@@ -1,9 +1,51 @@
-<!-- In HTML Comments are written like this -->
-<!-- They can all be removed for your apps -->
-<!doctype html> <!-- This first line tells browsers to expect modern standard html 5 -->
-<html lang="en-gb"> <!-- This is indicates the page is written in British English, useful for accessibility -->
-<meta charset="utf-8"> <!-- This indicates how the file is encoded. utf-8 is standard -->
-<title>Your Web-app Title</title> <!-- All pages need a title, this will be displayed in the browser's title bar -->
-<link rel="stylesheet" href="default.css"> <!-- Import style sheet – default.css -->
-<link rel="icon" href="./assets/favicon.png"> <!-- Import 'Favorites Icon' – favicon.png -->
-<script type="module" src="main.js"></script> <!-- Load the main script. Must be type="module". Have only one of these -->
+<!doctype html>
+<html lang="en-gb">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>kingDOMino</title>
+<meta name="description" content="Kingdomino web app — place tiles, build your kingdom, and score.">
+<link rel="stylesheet" href="default.css">
+<link rel="icon" href="./assets/favicon.svg">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+</head>
+<body>
+    <header id="app-header">
+        <h1>king<span class="accent">DOM</span>ino</h1>
+        <div id="score-display">
+            <span class="score-label">Score</span>
+            <span id="score-value">0</span>
+        </div>
+    </header>
+
+    <main id="app-main">
+        <!-- Game board grid -->
+        <section id="board-section">
+            <div id="game-board" role="grid" aria-label="Game board"></div>
+        </section>
+
+        <!-- Controls + tile picker -->
+        <aside id="sidebar">
+            <div id="controls">
+                <button id="btn-rotate" title="Rotate domino (R)">↻ Rotate</button>
+                <button id="btn-undo" title="Undo last placement (Ctrl+Z)">↩ Undo</button>
+                <div id="rotation-indicator">
+                    <span class="rotation-label">Rotation:</span>
+                    <span id="rotation-name">Right</span>
+                </div>
+            </div>
+
+            <div id="message-bar" aria-live="polite"></div>
+
+            <div id="tile-picker">
+                <h2>Tile Deck</h2>
+                <div id="deck-grid"></div>
+            </div>
+        </aside>
+    </main>
+
+    <script type="module" src="main.js"></script>
+</body>
+</html>
