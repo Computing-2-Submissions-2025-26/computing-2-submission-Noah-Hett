@@ -1,6 +1,5 @@
-/* ─── Kingdomino Test UI ──────────────────────────────────────────────────
-   Minimal but functional styling for testing tile placement and scoring.
-   Focused on clarity — full visual polish comes later.
+/* ─── Kingdomino 2-Player UI ─────────────────────────────────────────────
+   Two boards side-by-side with central drafting area.
    ──────────────────────────────────────────────────────────────────────── */
 
 /* ── Reset & base ──────────────────────────────────────────────────────── */
@@ -22,6 +21,10 @@
     --c-mine: #4A4A4A;
     --c-castle: #F5F5F5;
 
+    /* Player colours */
+    --c-p1: #E91E63;
+    --c-p2: #2196F3;
+
     /* UI colours */
     --c-bg: #1a1a2e;
     --c-surface: #16213e;
@@ -35,7 +38,7 @@
     --c-valid: rgba(126, 200, 80, 0.35);
     --c-invalid: rgba(233, 69, 96, 0.25);
 
-    --cell-size: 52px;
+    --cell-size: 42px;
     --gap: 2px;
     --radius: 6px;
 }
@@ -54,59 +57,87 @@ body {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    padding: 16px 24px;
+    padding: 12px 24px;
     background: var(--c-surface);
     border-bottom: 1px solid var(--c-border);
 }
 
 #app-header h1 {
-    font-size: 1.5rem;
+    font-size: 1.3rem;
     font-weight: 700;
     letter-spacing: 0.03em;
 }
 
-#app-header .accent {
-    color: var(--c-accent);
-}
+#app-header .accent { color: var(--c-accent); }
 
-#score-display {
-    display: flex;
-    align-items: baseline;
-    gap: 10px;
-}
-
-.score-label {
-    font-size: 0.85rem;
+#phase-label {
+    font-size: 0.8rem;
     text-transform: uppercase;
     letter-spacing: 0.08em;
     color: var(--c-text-muted);
 }
 
-#score-value {
-    font-size: 2rem;
+/* ── Main layout: boards + draft ───────────────────────────────────────── */
+#app-main {
+    flex: 1;
+    display: flex;
+    gap: 16px;
+    padding: 16px;
+    overflow: auto;
+    justify-content: center;
+    align-items: flex-start;
+}
+
+/* ── Player sections ───────────────────────────────────────────────────── */
+.player-section {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    border: 2px solid var(--c-border);
+    border-radius: var(--radius);
+    padding: 10px;
+    background: var(--c-surface);
+    transition: border-color 0.25s, box-shadow 0.25s;
+}
+
+.player-section.active {
+    box-shadow: 0 0 16px rgba(255, 255, 255, 0.06);
+}
+
+#player-P1.active { border-color: var(--c-p1); }
+#player-P2.active { border-color: var(--c-p2); }
+
+.player-section.inactive {
+    opacity: 0.5;
+    pointer-events: none;
+}
+
+.player-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+}
+
+.player-name {
+    font-size: 0.85rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+}
+
+#player-P1 .player-name { color: var(--c-p1); }
+#player-P2 .player-name { color: var(--c-p2); }
+
+.player-score {
+    font-size: 1.4rem;
     font-weight: 700;
     color: var(--c-crown);
     min-width: 3ch;
     text-align: right;
 }
 
-/* ── Main layout ───────────────────────────────────────────────────────── */
-#app-main {
-    flex: 1;
-    display: flex;
-    gap: 24px;
-    padding: 24px;
-    overflow: auto;
-}
-
-#board-section {
-    display: flex;
-    align-items: flex-start;
-    justify-content: center;
-}
-
-/* ── Game board ────────────────────────────────────────────────────────── */
-#game-board {
+/* ── Game boards ───────────────────────────────────────────────────────── */
+.game-board {
     display: grid;
     grid-template-columns: repeat(9, var(--cell-size));
     grid-template-rows: repeat(9, var(--cell-size));
@@ -128,11 +159,11 @@ body {
     justify-content: center;
     cursor: pointer;
     position: relative;
-    transition: outline 0.1s, background 0.15s;
-    font-size: 0.6rem;
+    transition: background 0.15s;
+    font-size: 0.5rem;
     font-weight: 600;
     text-transform: uppercase;
-    letter-spacing: 0.05em;
+    letter-spacing: 0.04em;
     color: rgba(255, 255, 255, 0.8);
     text-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
     user-select: none;
@@ -166,50 +197,51 @@ body {
     background: var(--c-castle);
     color: #333;
     text-shadow: none;
-    font-size: 1.2rem;
+    font-size: 1rem;
 }
 
-/* Crown indicators — small gold circles at the top */
+/* Crown indicators */
 .crowns {
     position: absolute;
-    top: 3px;
+    top: 2px;
     display: flex;
-    gap: 3px;
+    gap: 2px;
 }
 
 .crown-dot {
-    width: 8px;
-    height: 8px;
+    width: 7px;
+    height: 7px;
     border-radius: 50%;
     background: var(--c-crown);
     border: 1px solid rgba(0, 0, 0, 0.3);
     box-shadow: 0 0 3px rgba(255, 215, 0, 0.5);
 }
 
-/* ── Sidebar ───────────────────────────────────────────────────────────── */
-#sidebar {
+/* ── Drafting area ─────────────────────────────────────────────────────── */
+#draft-section {
     display: flex;
     flex-direction: column;
-    gap: 16px;
-    min-width: 280px;
-    max-width: 340px;
+    gap: 12px;
+    min-width: 220px;
+    max-width: 260px;
+    padding-top: 4px;
 }
 
 #controls {
     display: flex;
     flex-wrap: wrap;
-    gap: 10px;
+    gap: 8px;
     align-items: center;
 }
 
 #controls button {
-    padding: 8px 16px;
+    padding: 6px 14px;
     border: 1px solid var(--c-border);
     border-radius: var(--radius);
     background: var(--c-surface-alt);
     color: var(--c-text);
     font-family: var(--font-main);
-    font-size: 0.85rem;
+    font-size: 0.8rem;
     font-weight: 600;
     cursor: pointer;
     transition: background 0.15s, border-color 0.15s;
@@ -221,7 +253,7 @@ body {
 }
 
 #rotation-indicator {
-    font-size: 0.8rem;
+    font-size: 0.75rem;
     color: var(--c-text-muted);
 }
 
@@ -230,12 +262,36 @@ body {
     color: var(--c-text);
 }
 
+/* Turn indicator */
+#turn-indicator {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 2px;
+    padding: 8px 12px;
+    border-radius: var(--radius);
+    background: var(--c-surface-alt);
+    border: 1px solid var(--c-border);
+}
+
+#turn-player {
+    font-size: 1rem;
+    font-weight: 700;
+}
+
+#turn-action {
+    font-size: 0.7rem;
+    color: var(--c-text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+}
+
 /* Message bar */
 #message-bar {
-    min-height: 32px;
-    padding: 6px 12px;
+    min-height: 36px;
+    padding: 6px 10px;
     border-radius: var(--radius);
-    font-size: 0.8rem;
+    font-size: 0.75rem;
     line-height: 1.4;
     background: var(--c-surface);
     border: 1px solid var(--c-border);
@@ -255,28 +311,39 @@ body {
     border-color: var(--c-grassland);
 }
 
-/* ── Tile picker ───────────────────────────────────────────────────────── */
-#tile-picker h2 {
-    font-size: 0.95rem;
-    font-weight: 600;
-    margin-bottom: 8px;
-    color: var(--c-text-muted);
-    text-transform: uppercase;
-    letter-spacing: 0.06em;
-}
-
-#deck-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
-    gap: 6px;
-    max-height: 60vh;
-    overflow-y: auto;
-    padding-right: 4px;
-}
-
-/* Individual domino tile in the picker */
-.deck-tile {
+/* Draft lines */
+#draft-lines {
     display: flex;
+    gap: 12px;
+}
+
+.draft-column {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.draft-heading {
+    font-size: 0.7rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--c-text-muted);
+    text-align: center;
+}
+
+.draft-line {
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+}
+
+/* Individual draft slot */
+.draft-slot {
+    display: flex;
+    align-items: center;
+    gap: 4px;
     border-radius: var(--radius);
     overflow: hidden;
     border: 2px solid var(--c-border);
@@ -285,67 +352,102 @@ body {
     position: relative;
 }
 
-.deck-tile:hover {
+.draft-slot:hover {
     border-color: var(--c-text-muted);
-    transform: scale(1.04);
 }
 
-.deck-tile.selected {
-    border-color: var(--c-accent);
-    box-shadow: 0 0 8px var(--c-accent-soft);
+.draft-slot.highlight {
+    border-color: var(--c-crown);
+    box-shadow: 0 0 8px rgba(255, 215, 0, 0.2);
 }
 
-.deck-tile.used {
-    opacity: 0.25;
+.draft-slot.available {
+    border-color: rgba(126, 200, 80, 0.5);
+}
+
+.draft-slot.available:hover {
+    border-color: var(--c-grassland);
+    transform: scale(1.03);
+}
+
+.draft-slot.claimed {
+    opacity: 0.4;
     pointer-events: none;
 }
 
-.deck-tile-half {
+.draft-slot-half {
     flex: 1;
     aspect-ratio: 1;
     display: flex;
     flex-direction: column;
     align-items: center;
     justify-content: center;
-    font-size: 0.55rem;
+    font-size: 0.45rem;
     font-weight: 600;
     text-transform: uppercase;
     letter-spacing: 0.04em;
     color: rgba(255, 255, 255, 0.85);
     text-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
     position: relative;
-    padding: 4px;
+    min-height: 32px;
 }
 
-.deck-tile-half[data-terrain="wheat"]     { background: var(--c-wheat); }
-.deck-tile-half[data-terrain="forest"]    { background: var(--c-forest); }
-.deck-tile-half[data-terrain="water"]     { background: var(--c-water); }
-.deck-tile-half[data-terrain="grassland"] { background: var(--c-grassland); }
-.deck-tile-half[data-terrain="swamp"]     { background: var(--c-swamp); }
-.deck-tile-half[data-terrain="mine"]      { background: var(--c-mine); }
+.draft-slot-half[data-terrain="wheat"]     { background: var(--c-wheat); }
+.draft-slot-half[data-terrain="forest"]    { background: var(--c-forest); }
+.draft-slot-half[data-terrain="water"]     { background: var(--c-water); }
+.draft-slot-half[data-terrain="grassland"] { background: var(--c-grassland); }
+.draft-slot-half[data-terrain="swamp"]     { background: var(--c-swamp); }
+.draft-slot-half[data-terrain="mine"]      { background: var(--c-mine); }
 
-.deck-tile-half .crowns {
+.draft-slot-half .crowns {
     position: absolute;
-    top: 2px;
+    top: 1px;
 }
 
-.deck-tile-id {
-    position: absolute;
-    bottom: 2px;
-    right: 4px;
-    font-size: 0.5rem;
-    color: rgba(255, 255, 255, 0.4);
+.draft-slot-half .crown-dot {
+    width: 6px;
+    height: 6px;
 }
+
+/* Meeple indicator on draft slots */
+.meeple-tag {
+    position: absolute;
+    right: 3px;
+    top: 50%;
+    transform: translateY(-50%);
+    font-size: 0.55rem;
+    font-weight: 700;
+    padding: 1px 4px;
+    border-radius: 3px;
+    color: #fff;
+    z-index: 1;
+}
+
+.meeple-tag.P1 { background: var(--c-p1); }
+.meeple-tag.P2 { background: var(--c-p2); }
 
 /* ── Scrollbar styling ─────────────────────────────────────────────────── */
-#deck-grid::-webkit-scrollbar {
-    width: 5px;
+::-webkit-scrollbar { width: 5px; }
+::-webkit-scrollbar-track { background: var(--c-surface); border-radius: 3px; }
+::-webkit-scrollbar-thumb { background: var(--c-border); border-radius: 3px; }
+
+/* ── Game over overlay ─────────────────────────────────────────────────── */
+.game-over-banner {
+    text-align: center;
+    padding: 16px;
+    background: var(--c-surface-alt);
+    border: 2px solid var(--c-crown);
+    border-radius: var(--radius);
+    margin-top: 8px;
 }
-#deck-grid::-webkit-scrollbar-track {
-    background: var(--c-surface);
-    border-radius: 3px;
+
+.game-over-banner h2 {
+    color: var(--c-crown);
+    font-size: 1.1rem;
+    margin-bottom: 4px;
 }
-#deck-grid::-webkit-scrollbar-thumb {
-    background: var(--c-border);
-    border-radius: 3px;
+
+.game-over-banner p {
+    font-size: 0.85rem;
+    color: var(--c-text);
 }

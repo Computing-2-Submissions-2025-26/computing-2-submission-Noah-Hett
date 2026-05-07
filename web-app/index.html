@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>kingDOMino</title>
-<meta name="description" content="Kingdomino web app — place tiles, build your kingdom, and score.">
+<meta name="description" content="Kingdomino — 2-player web app with drafting and scoring.">
 <link rel="stylesheet" href="default.css">
 <link rel="icon" href="./assets/favicon.svg">
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -14,36 +14,58 @@
 <body>
     <header id="app-header">
         <h1>king<span class="accent">DOM</span>ino</h1>
-        <div id="score-display">
-            <span class="score-label">Score</span>
-            <span id="score-value">0</span>
+        <div id="phase-display">
+            <span id="phase-label"></span>
         </div>
     </header>
 
     <main id="app-main">
-        <!-- Game board grid -->
-        <section id="board-section">
-            <div id="game-board" role="grid" aria-label="Game board"></div>
+        <!-- Player 1 board -->
+        <section class="player-section" id="player-P1">
+            <div class="player-header">
+                <span class="player-name">Player 1</span>
+                <span class="player-score" id="score-P1">0</span>
+            </div>
+            <div class="game-board" id="board-P1" role="grid" aria-label="Player 1 board"></div>
         </section>
 
-        <!-- Controls + tile picker -->
-        <aside id="sidebar">
+        <!-- Central drafting area -->
+        <section id="draft-section">
             <div id="controls">
                 <button id="btn-rotate" title="Rotate domino (R)">↻ Rotate</button>
-                <button id="btn-undo" title="Undo last placement (Ctrl+Z)">↩ Undo</button>
                 <div id="rotation-indicator">
                     <span class="rotation-label">Rotation:</span>
                     <span id="rotation-name">Right</span>
                 </div>
             </div>
 
+            <div id="turn-indicator">
+                <span id="turn-player"></span>
+                <span id="turn-action"></span>
+            </div>
+
             <div id="message-bar" aria-live="polite"></div>
 
-            <div id="tile-picker">
-                <h2>Tile Deck</h2>
-                <div id="deck-grid"></div>
+            <div id="draft-lines">
+                <div class="draft-column" id="current-line-col">
+                    <h3 class="draft-heading">Current</h3>
+                    <div id="current-line" class="draft-line"></div>
+                </div>
+                <div class="draft-column" id="next-line-col">
+                    <h3 class="draft-heading">Next</h3>
+                    <div id="next-line" class="draft-line"></div>
+                </div>
             </div>
-        </aside>
+        </section>
+
+        <!-- Player 2 board -->
+        <section class="player-section" id="player-P2">
+            <div class="player-header">
+                <span class="player-name">Player 2</span>
+                <span class="player-score" id="score-P2">0</span>
+            </div>
+            <div class="game-board" id="board-P2" role="grid" aria-label="Player 2 board"></div>
+        </section>
     </main>
 
     <script type="module" src="main.js"></script>

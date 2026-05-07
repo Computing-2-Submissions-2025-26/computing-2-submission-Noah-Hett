@@ -1,10 +1,11 @@
 /**
  * Kingdomino.test.js — Mocha test suite for the Kingdomino game logic.
  *
- * Covers the three backend modules:
+ * Covers the four backend modules:
  *   - Domino.js  (deck factory, rotation offsets)
  *   - Board.js   (grid creation, placement validation, domino placement)
  *   - Scoring.js (zone detection, scoring)
+ *   - Game.js    (multi-player state, drafting, turn flow)
  */
 
 import { strict as assert } from "node:assert";
@@ -29,6 +30,17 @@ import {
     score_zones,
     score_board
 } from "../Scoring.js";
+import {
+    PHASES,
+    create_player,
+    create_game,
+    shuffle_array,
+    has_valid_placement,
+    get_player,
+    deal_from_deck,
+    place_meeple,
+    attempt_placement
+} from "../Game.js";
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
@@ -509,3 +521,228 @@ describe("Scoring module", function () {
         });
     });
 });
+
+// ═══════════════════════════════════════════════════════════════════════════
+//  GAME MODULE
+// ═══════════════════════════════════════════════════════════════════════════
+
+describe("Game module", function () {
+    describe("shuffle_array", function () {
+        it("returns a new array of the same length", function () {
+            const arr = [1, 2, 3, 4, 5];
+            const shuffled = shuffle_array(arr);
+            assert.equal(shuffled.length, arr.length);
+            // Original unchanged
+            assert.deepEqual(arr, [1, 2, 3, 4, 5]);
+        });
+
+        it("contains the same elements", function () {
+            const arr = [10, 20, 30, 40];
+            const shuffled = shuffle_array(arr);
+            assert.deepEqual(shuffled.sort(), arr.sort());
+        });
+    });
+
+    describe("create_player", function () {
+        it("creates a player with a fresh board and score 0", function () {
+            const p = create_player("P1", "#E91E63", "Player 1");
+            assert.equal(p.id, "P1");
+            assert.equal(p.color, "#E91E63");
+            assert.equal(p.score, 0);
+            assert.equal(p.board.length, GRID_SIZE);
+            // Castle at [4][4]
+            assert.equal(p.board[4][4].terrain, "castle");
+        });
+    });
+
+    describe("deal_from_deck", function () {
+        const deck = build_deck().slice(0, 10); // 10 tiles
+
+        it("deals 4 tiles sorted by id", function () {
+            const { line, deck: remaining } = deal_from_deck(deck);
+            assert.equal(line.length, 4);
+            assert.equal(remaining.length, 6);
+            // Sorted by id
+            for (let i = 1; i < line.length; i++) {
+                assert.ok(line[i].domino.id >= line[i - 1].domino.id);
+            }
+            // Each slot starts with no meeple
+            line.forEach((slot) => assert.equal(slot.meeple, null));
+        });
+
+        it("returns empty line if deck has fewer than 4 tiles", function () {
+            const small = [build_deck()[0], build_deck()[1]];
+            const { line } = deal_from_deck(small);
+            assert.equal(line.length, 0);
+        });
+    });
+
+    describe("create_game", function () {
+        const game = create_game(2);
+
+        it("creates 2 players with independent boards", function () {
+            assert.equal(game.players.length, 2);
+            assert.equal(game.players[0].id, "P1");
+            assert.equal(game.players[1].id, "P2");
+            // Boards are distinct objects
+            assert.notStrictEqual(game.players[0].board, game.players[1].board);
+        });
+
+        it("has a 20-tile deck (24 total - 4 dealt)", function () {
+            assert.equal(game.deck.length, 20);
+        });
+
+        it("has 4 tiles in next_line sorted by id", function () {
+            assert.equal(game.next_line.length, 4);
+            for (let i = 1; i < game.next_line.length; i++) {
+                assert.ok(
+                    game.next_line[i].domino.id
+                    >= game.next_line[i - 1].domino.id
+                );
+            }
+        });
+
+        it("starts in DRAFT_INITIAL phase", function () {
+            assert.equal(game.phase, PHASES.DRAFT_INITIAL);
+        });
+
+        it("has a randomised meeple order of 4", function () {
+            assert.equal(game.meeple_order.length, 4);
+            const p1_count = game.meeple_order.filter(
+                (m) => m === "P1"
+            ).length;
+            const p2_count = game.meeple_order.filter(
+                (m) => m === "P2"
+            ).length;
+            assert.equal(p1_count, 2);
+            assert.equal(p2_count, 2);
+        });
+
+        it("current_line is empty at start", function () {
+            assert.equal(game.current_line.length, 0);
+        });
+    });
+
+    describe("place_meeple (initial draft)", function () {
+        it("places a meeple on a next_line slot", function () {
+            const game = create_game(2);
+            const s1 = place_meeple(game, 0);
+            assert.equal(
+                s1.next_line[0].meeple,
+                game.active_player_id
+            );
+        });
+
+        it("rejects already-taken slots", function () {
+            const game = create_game(2);
+            const s1 = place_meeple(game, 0);
+            const s2 = place_meeple(s1, 0);
+            assert.ok(s2.message.includes("already taken"));
+        });
+
+        it("advances to next meeple after each pick", function () {
+            const game = create_game(2);
+            const s1 = place_meeple(game, 0);
+            assert.equal(s1.active_player_id, game.meeple_order[1]);
+        });
+
+        it("transitions to RESOLVE_PLACE after all 4 meeples placed", function () {
+            let s = create_game(2);
+            // Place all 4 meeples on slots 0-3
+            s = place_meeple(s, 0);
+            s = place_meeple(s, 1);
+            s = place_meeple(s, 2);
+            s = place_meeple(s, 3);
+            assert.equal(s.phase, PHASES.RESOLVE_PLACE);
+            assert.equal(s.current_line.length, 4);
+            assert.equal(s.round, 2);
+        });
+    });
+
+    describe("attempt_placement", function () {
+        /** Helper: get a game state in RESOLVE_PLACE phase. */
+        function get_resolve_state() {
+            let s = create_game(2);
+            s = place_meeple(s, 0);
+            s = place_meeple(s, 1);
+            s = place_meeple(s, 2);
+            s = place_meeple(s, 3);
+            // Now in RESOLVE_PLACE, current_line[0]
+            return s;
+        }
+
+        it("places tile on the active player's board", function () {
+            const s = get_resolve_state();
+            const pid = s.active_player_id;
+            // Place adjacent to castle: primary at [4][5], rotation 0 (Right)
+            const s2 = attempt_placement(s, 4, 5, 0);
+            const player = get_player(s2, pid);
+            assert.notEqual(player.board[4][5], null);
+            assert.notEqual(player.board[4][6], null);
+        });
+
+        it("updates the player's score after placement", function () {
+            const s = get_resolve_state();
+            const pid = s.active_player_id;
+            const s2 = attempt_placement(s, 4, 5, 0);
+            const player = get_player(s2, pid);
+            // Score recalculated from board
+            assert.equal(player.score, score_board(player.board));
+        });
+
+        it("transitions to RESOLVE_DRAFT after valid placement", function () {
+            const s = get_resolve_state();
+            const s2 = attempt_placement(s, 4, 5, 0);
+            assert.equal(s2.phase, PHASES.RESOLVE_DRAFT);
+        });
+
+        it("rejects invalid placement without changing board", function () {
+            const s = get_resolve_state();
+            // Place at [0][0] — far from castle, should fail
+            const s2 = attempt_placement(s, 0, 0, 0);
+            assert.equal(s2.phase, PHASES.RESOLVE_PLACE);
+            const player = get_player(s2, s.active_player_id);
+            assert.equal(player.board[0][0], null);
+        });
+
+        it("does not modify the other player's board", function () {
+            const s = get_resolve_state();
+            const pid = s.active_player_id;
+            const other_pid = pid === "P1" ? "P2" : "P1";
+            const s2 = attempt_placement(s, 4, 5, 0);
+            const other = get_player(s2, other_pid);
+            // Other board should only have the castle
+            assert.equal(get_occupied_coords(other.board).length, 1);
+        });
+    });
+
+    describe("has_valid_placement", function () {
+        it("returns true for a fresh board (any tile fits near castle)", function () {
+            const board = create_board();
+            const d = test_domino(1, "wheat", 0, "wheat", 0);
+            assert.ok(has_valid_placement(board, d));
+        });
+    });
+
+    describe("full round cycle", function () {
+        it("completes initial draft and first placement round", function () {
+            let s = create_game(2);
+            // Initial draft: place all 4 meeples
+            s = place_meeple(s, 0);
+            s = place_meeple(s, 1);
+            s = place_meeple(s, 2);
+            s = place_meeple(s, 3);
+            assert.equal(s.phase, PHASES.RESOLVE_PLACE);
+
+            // Resolve first slot: place + draft
+            s = attempt_placement(s, 4, 5, 0);
+            assert.equal(s.phase, PHASES.RESOLVE_DRAFT);
+            s = place_meeple(s, 0);
+
+            // Should advance to next slot
+            assert.equal(s.phase, PHASES.RESOLVE_PLACE);
+            assert.equal(s.current_line_index, 1);
+        });
+    });
+});
+

@@ -1,49 +1,43 @@
 /**
- * main.js — UI controller for the Kingdomino test interface.
+ * main.js — UI controller for the 2-player Kingdomino game.
  *
- * This is a thin view layer that wires DOM events to the game-logic
- * modules (Domino, Board, Scoring). All state mutations go through
- * the pure backend functions.
+ * Thin view layer that wires DOM events to Game.js state transitions.
+ * Renders two boards, the drafting lines, and the turn/phase indicators.
  *
  * @module main
  */
 
-import { build_deck, get_secondary_offset, TERRAIN_TYPES } from "./Domino.js";
-import {
-    GRID_SIZE,
-    create_board,
-    get_cell,
-    validate_placement,
-    place_domino
-} from "./Board.js";
+import { get_secondary_offset } from "./Domino.js";
+import { GRID_SIZE, get_cell, validate_placement } from "./Board.js";
 import { score_board } from "./Scoring.js";
+import {
+    PHASES,
+    create_game,
+    get_player,
+    place_meeple,
+    attempt_placement
+} from "./Game.js";
 
 // ─── Application state ─────────────────────────────────────────────────────
 
 const ROTATION_NAMES = ["Right", "Down", "Left", "Up"];
 
-let state = {
-    board: create_board(),
-    deck: build_deck(),
-    used_ids: new Set(),
-    history: [],           // stack of previous boards for undo
-    selected_tile: null,   // domino object or null
-    rotation: 0            // 0–3
-};
+let state = create_game(2);
+let rotation = 0;
 
 // ─── DOM references ─────────────────────────────────────────────────────────
 
-const board_el = document.getElementById("game-board");
-const deck_el = document.getElementById("deck-grid");
-const score_el = document.getElementById("score-value");
+const phase_el = document.getElementById("phase-label");
 const msg_el = document.getElementById("message-bar");
 const rot_name_el = document.getElementById("rotation-name");
 const btn_rotate = document.getElementById("btn-rotate");
-const btn_undo = document.getElementById("btn-undo");
+const current_line_el = document.getElementById("current-line");
+const next_line_el = document.getElementById("next-line");
+const turn_player_el = document.getElementById("turn-player");
+const turn_action_el = document.getElementById("turn-action");
 
-// ─── Rendering ──────────────────────────────────────────────────────────────
+// ─── Rendering helpers ──────────────────────────────────────────────────────
 
-/** Create the crown dot indicators for a cell. */
 function render_crowns(count) {
     if (count === 0) {
         return "";
@@ -55,17 +49,26 @@ function render_crowns(count) {
     return `<span class="crowns">${dots}</span>`;
 }
 
-/** Render the 9×9 game board into the DOM. */
-function render_board() {
+function show_message(text, type) {
+    msg_el.textContent = text;
+    msg_el.className = type || "";
+}
+
+// ─── Board rendering ────────────────────────────────────────────────────────
+
+function render_board(player_id) {
+    const board_el = document.getElementById(`board-${player_id}`);
+    const player = get_player(state, player_id);
     board_el.innerHTML = "";
+
     for (let r = 0; r < GRID_SIZE; r++) {
         for (let c = 0; c < GRID_SIZE; c++) {
-            const cell = get_cell(state.board, r, c);
+            const cell = get_cell(player.board, r, c);
             const div = document.createElement("div");
             div.className = "cell";
             div.dataset.row = r;
             div.dataset.col = c;
-            div.id = `cell-${r}-${c}`;
+            div.id = `cell-${player_id}-${r}-${c}`;
 
             if (cell !== null) {
                 div.dataset.terrain = cell.terrain;
@@ -73,215 +76,295 @@ function render_board() {
                     div.innerHTML = "🏰";
                 } else {
                     div.innerHTML =
-                        render_crowns(cell.crowns) +
-                        `<span class="terrain-label">${cell.terrain}</span>`;
+                        render_crowns(cell.crowns)
+                        + `<span class="terrain-label">${cell.terrain}</span>`;
                 }
             }
 
-            // Hover preview (only for empty cells when a tile is selected)
-            div.addEventListener("mouseenter", () => handle_hover(r, c));
-            div.addEventListener("mouseleave", () => clear_preview());
-            div.addEventListener("click", () => handle_cell_click(r, c));
+            // Board interaction only during RESOLVE_PLACE for active player
+            if (state.phase === PHASES.RESOLVE_PLACE
+                && state.active_player_id === player_id) {
+                div.addEventListener("mouseenter", () =>
+                    handle_board_hover(player_id, r, c));
+                div.addEventListener("mouseleave", () =>
+                    clear_preview(player_id));
+                div.addEventListener("click", () =>
+                    handle_board_click(r, c));
+            }
 
             board_el.appendChild(div);
         }
     }
 }
 
-/** Render the tile deck in the sidebar. */
-function render_deck() {
-    deck_el.innerHTML = "";
-    state.deck.forEach((domino) => {
-        const tile_el = document.createElement("div");
-        tile_el.className = "deck-tile";
-        tile_el.id = `tile-${domino.id}`;
+function render_boards() {
+    render_board("P1");
+    render_board("P2");
 
-        if (state.used_ids.has(domino.id)) {
-            tile_el.classList.add("used");
+    // Highlight active/inactive player sections
+    const p1_section = document.getElementById("player-P1");
+    const p2_section = document.getElementById("player-P2");
+
+    p1_section.classList.remove("active", "inactive");
+    p2_section.classList.remove("active", "inactive");
+
+    if (state.phase === PHASES.RESOLVE_PLACE) {
+        if (state.active_player_id === "P1") {
+            p1_section.classList.add("active");
+            p2_section.classList.add("inactive");
+        } else {
+            p2_section.classList.add("active");
+            p1_section.classList.add("inactive");
         }
-        if (state.selected_tile && state.selected_tile.id === domino.id) {
-            tile_el.classList.add("selected");
+    } else if (state.phase !== PHASES.GAME_OVER) {
+        // During drafting, both boards visible but neither active
+        p1_section.classList.remove("inactive");
+        p2_section.classList.remove("inactive");
+    }
+}
+
+// ─── Draft line rendering ───────────────────────────────────────────────────
+
+function render_draft_slot(slot, index, line_type) {
+    const el = document.createElement("div");
+    el.className = "draft-slot";
+    el.id = `${line_type}-slot-${index}`;
+
+    // Primary half
+    const p = document.createElement("div");
+    p.className = "draft-slot-half";
+    p.dataset.terrain = slot.domino.primary.terrain;
+    p.innerHTML = render_crowns(slot.domino.primary.crowns);
+
+    // Secondary half
+    const s = document.createElement("div");
+    s.className = "draft-slot-half";
+    s.dataset.terrain = slot.domino.secondary.terrain;
+    s.innerHTML = render_crowns(slot.domino.secondary.crowns);
+
+    el.appendChild(p);
+    el.appendChild(s);
+
+    // Meeple tag
+    if (slot.meeple) {
+        const tag = document.createElement("span");
+        tag.className = `meeple-tag ${slot.meeple}`;
+        tag.textContent = slot.meeple;
+        el.appendChild(tag);
+    }
+
+    return el;
+}
+
+function render_draft_lines() {
+    // ── Current line: hide resolved tiles, highlight active ──
+    current_line_el.innerHTML = "";
+    state.current_line.forEach((slot, i) => {
+        // Skip already-resolved tiles
+        if (i < state.current_line_index) {
+            return;
+        }
+        const el = render_draft_slot(slot, i, "current");
+        if (i === state.current_line_index
+            && (state.phase === PHASES.RESOLVE_PLACE
+                || state.phase === PHASES.RESOLVE_DRAFT)) {
+            el.classList.add("highlight");
+        }
+        current_line_el.appendChild(el);
+    });
+
+    // ── Next line: available vs claimed ──
+    next_line_el.innerHTML = "";
+    const is_draft_phase = state.phase === PHASES.DRAFT_INITIAL
+        || state.phase === PHASES.RESOLVE_DRAFT;
+
+    state.next_line.forEach((slot, i) => {
+        const el = render_draft_slot(slot, i, "next");
+
+        if (slot.meeple !== null) {
+            // Already claimed — dim it
+            el.classList.add("claimed");
+        } else if (is_draft_phase) {
+            // Available for picking
+            el.classList.add("available");
+            el.addEventListener("click", () => handle_draft_click(i));
         }
 
-        // Primary half
-        const p = document.createElement("div");
-        p.className = "deck-tile-half";
-        p.dataset.terrain = domino.primary.terrain;
-        p.innerHTML = render_crowns(domino.primary.crowns);
-
-        // Secondary half
-        const s = document.createElement("div");
-        s.className = "deck-tile-half";
-        s.dataset.terrain = domino.secondary.terrain;
-        s.innerHTML = render_crowns(domino.secondary.crowns);
-
-        // Tile number
-        const id_el = document.createElement("span");
-        id_el.className = "deck-tile-id";
-        id_el.textContent = `#${domino.id}`;
-
-        tile_el.appendChild(p);
-        tile_el.appendChild(s);
-        tile_el.appendChild(id_el);
-
-        tile_el.addEventListener("click", () => select_tile(domino));
-        deck_el.appendChild(tile_el);
+        next_line_el.appendChild(el);
     });
 }
 
-/** Update the score display. */
-function render_score() {
-    score_el.textContent = score_board(state.board);
+// ─── Score & phase rendering ────────────────────────────────────────────────
+
+function render_scores() {
+    state.players.forEach((p) => {
+        document.getElementById(`score-${p.id}`).textContent = p.score;
+    });
 }
 
-/** Update the rotation indicator. */
+function render_phase() {
+    const phase_names = {
+        [PHASES.DRAFT_INITIAL]: "Initial Draft",
+        [PHASES.RESOLVE_PLACE]: "Place Tile",
+        [PHASES.RESOLVE_DRAFT]: "Draft Next Tile",
+        [PHASES.GAME_OVER]: "Game Over"
+    };
+    phase_el.textContent = phase_names[state.phase] || state.phase;
+}
+
+function render_turn_indicator() {
+    const pid = state.active_player_id;
+    const player = get_player(state, pid);
+    const indicator = document.getElementById("turn-indicator");
+
+    if (state.phase === PHASES.GAME_OVER) {
+        indicator.style.display = "none";
+        return;
+    }
+    indicator.style.display = "";
+
+    // Set player name + colour
+    turn_player_el.textContent = player.name;
+    turn_player_el.style.color = player.color;
+
+    // Set action text
+    const actions = {
+        [PHASES.DRAFT_INITIAL]: "Pick a tile from the Next line",
+        [PHASES.RESOLVE_PLACE]: "Place your tile on your board",
+        [PHASES.RESOLVE_DRAFT]: "Pick your next tile"
+    };
+    turn_action_el.textContent = actions[state.phase] || "";
+}
+
 function render_rotation() {
-    rot_name_el.textContent = ROTATION_NAMES[state.rotation];
+    rot_name_el.textContent = ROTATION_NAMES[rotation];
 }
 
-/** Show a message in the message bar. */
-function show_message(text, type) {
-    msg_el.textContent = text;
-    msg_el.className = type || "";
+function render_game_over() {
+    if (state.phase !== PHASES.GAME_OVER) {
+        return;
+    }
+    const draft_section = document.getElementById("draft-section");
+    const banner = document.createElement("div");
+    banner.className = "game-over-banner";
+
+    const p1 = get_player(state, "P1");
+    const p2 = get_player(state, "P2");
+    let result_text;
+    if (p1.score > p2.score) {
+        result_text = "Player 1 wins!";
+    } else if (p2.score > p1.score) {
+        result_text = "Player 2 wins!";
+    } else {
+        result_text = "It's a tie!";
+    }
+
+    banner.innerHTML = `<h2>${result_text}</h2>`
+        + `<p>P1: ${p1.score} — P2: ${p2.score}</p>`;
+    draft_section.appendChild(banner);
 }
 
-/** Full UI refresh. */
 function render_all() {
-    render_board();
-    render_deck();
-    render_score();
+    render_boards();
+    render_draft_lines();
+    render_scores();
+    render_phase();
+    render_turn_indicator();
     render_rotation();
+    show_message(state.message, "");
+    render_game_over();
 }
 
 // ─── Interaction handlers ───────────────────────────────────────────────────
 
-/** Select a domino from the deck. */
-function select_tile(domino) {
-    if (state.used_ids.has(domino.id)) {
+function handle_board_hover(player_id, row, col) {
+    if (state.phase !== PHASES.RESOLVE_PLACE) {
         return;
     }
-    state.selected_tile = domino;
-    show_message(
-        `Selected tile #${domino.id}: ${domino.primary.terrain} | ${domino.secondary.terrain}`,
-        ""
-    );
-    render_deck();
-    // Re-render board to clear any stale previews
-    render_board();
-}
-
-/** Handle hovering over a board cell — show placement preview. */
-function handle_hover(row, col) {
-    if (!state.selected_tile) {
-        return;
-    }
-    const [dr, dc] = get_secondary_offset(state.rotation);
-    const sr = row + dr;
-    const sc = col + dc;
+    const slot = state.current_line[state.current_line_index];
+    const player = get_player(state, player_id);
+    const [dr, dc] = get_secondary_offset(rotation);
 
     const result = validate_placement(
-        state.board, state.selected_tile, row, col, state.rotation
+        player.board, slot.domino, row, col, rotation
     );
     const cls = result.valid ? "preview-valid" : "preview-invalid";
 
-    const primary_cell = document.getElementById(`cell-${row}-${col}`);
-    const secondary_cell = document.getElementById(`cell-${sr}-${sc}`);
-
-    if (primary_cell) {
-        primary_cell.classList.add(cls);
+    const pri = document.getElementById(
+        `cell-${player_id}-${row}-${col}`
+    );
+    const sec = document.getElementById(
+        `cell-${player_id}-${row + dr}-${col + dc}`
+    );
+    if (pri) {
+        pri.classList.add(cls);
     }
-    if (secondary_cell) {
-        secondary_cell.classList.add(cls);
+    if (sec) {
+        sec.classList.add(cls);
     }
 }
 
-/** Clear all preview highlights. */
-function clear_preview() {
-    document.querySelectorAll(".cell.preview-valid, .cell.preview-invalid")
+function clear_preview(player_id) {
+    const board_el = document.getElementById(`board-${player_id}`);
+    board_el.querySelectorAll(".preview-valid, .preview-invalid")
         .forEach((el) => {
             el.classList.remove("preview-valid", "preview-invalid");
         });
 }
 
-/** Handle clicking a board cell — attempt placement. */
-function handle_cell_click(row, col) {
-    if (!state.selected_tile) {
-        show_message("Select a tile from the deck first.", "error");
+function handle_board_click(row, col) {
+    if (state.phase !== PHASES.RESOLVE_PLACE) {
         return;
     }
-
-    const result = validate_placement(
-        state.board, state.selected_tile, row, col, state.rotation
-    );
-
-    if (!result.valid) {
-        show_message(result.reason, "error");
+    const new_state = attempt_placement(state, row, col, rotation);
+    // If phase didn't change, the placement was rejected
+    if (new_state.phase === PHASES.RESOLVE_PLACE
+        && new_state.current_line_index === state.current_line_index) {
+        show_message(new_state.message, "error");
         return;
     }
-
-    // Save current board for undo
-    state.history.push(state.board);
-
-    // Place the domino (returns a new board)
-    state.board = place_domino(
-        state.board, state.selected_tile, row, col, state.rotation
-    );
-
-    // Mark tile as used
-    state.used_ids.add(state.selected_tile.id);
-    const placed_id = state.selected_tile.id;
-    state.selected_tile = null;
-
-    show_message(
-        `Placed tile #${placed_id}. Score: ${score_board(state.board)}`,
-        "success"
-    );
+    state = new_state;
+    show_message(state.message, "success");
     render_all();
 }
 
-/** Rotate the current domino. */
-function rotate() {
-    state.rotation = (state.rotation + 1) % 4;
+function handle_draft_click(line_index) {
+    if (state.phase !== PHASES.DRAFT_INITIAL
+        && state.phase !== PHASES.RESOLVE_DRAFT) {
+        return;
+    }
+    // Only available (meeple === null) slots are rendered clickable,
+    // so we can safely accept the result without fragile rejection
+    // detection. The old check false-positived when consecutive
+    // meeples belonged to the same player.
+    if (state.next_line[line_index].meeple !== null) {
+        return; // Safety guard — slot already taken
+    }
+    state = place_meeple(state, line_index);
+    render_all();
+}
+
+function rotate_tile() {
+    rotation = (rotation + 1) % 4;
     render_rotation();
-    // Re-render board to update any hover preview
-    render_board();
-}
-
-/** Undo the last placement. */
-function undo() {
-    if (state.history.length === 0) {
-        show_message("Nothing to undo.", "error");
-        return;
+    // Re-render active board to update hover previews
+    if (state.phase === PHASES.RESOLVE_PLACE) {
+        render_board(state.active_player_id);
     }
-    state.board = state.history.pop();
-
-    // Remove the last used tile ID (most recently added)
-    const ids = Array.from(state.used_ids);
-    const last_id = ids[ids.length - 1];
-    state.used_ids.delete(last_id);
-
-    show_message(`Undid tile #${last_id}.`, "");
-    render_all();
 }
 
 // ─── Keyboard shortcuts ─────────────────────────────────────────────────────
 
 document.addEventListener("keydown", function (e) {
     if (e.key === "r" || e.key === "R") {
-        rotate();
-    }
-    if (e.key === "z" && (e.ctrlKey || e.metaKey)) {
-        e.preventDefault();
-        undo();
+        rotate_tile();
     }
 });
 
 // ─── Button bindings ────────────────────────────────────────────────────────
 
-btn_rotate.addEventListener("click", rotate);
-btn_undo.addEventListener("click", undo);
+btn_rotate.addEventListener("click", rotate_tile);
 
 // ─── Initial render ─────────────────────────────────────────────────────────
 
-show_message("Select a tile from the deck, then click on the board to place it.", "");
 render_all();
