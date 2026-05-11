@@ -1,9 +1,10 @@
-/* ─── Kingdomino 2-Player UI ─────────────────────────────────────────────
-   Two boards side-by-side with central drafting area.
+/* ─── Kingdomino 2-Player — Board-Top / Draft-Bottom Layout ──────────────
+   Invisible grid, horizontal tile rows, drag-only placement.
    ──────────────────────────────────────────────────────────────────────── */
 
-/* ── Reset & base ──────────────────────────────────────────────────────── */
-*, *::before, *::after {
+*,
+*::before,
+*::after {
     box-sizing: border-box;
     margin: 0;
     padding: 0;
@@ -25,7 +26,7 @@
     --c-p1: #E91E63;
     --c-p2: #2196F3;
 
-    /* UI colours */
+    /* UI */
     --c-bg: #1a1a2e;
     --c-surface: #16213e;
     --c-surface-alt: #0f3460;
@@ -35,10 +36,10 @@
     --c-accent-soft: rgba(233, 69, 96, 0.15);
     --c-border: #2a2a4a;
     --c-crown: #FFD700;
-    --c-valid: rgba(126, 200, 80, 0.35);
-    --c-invalid: rgba(233, 69, 96, 0.25);
+    --c-valid: rgba(126, 200, 80, 0.4);
+    --c-invalid: rgba(233, 69, 96, 0.3);
 
-    --cell-size: 42px;
+    --cell: 44px;
     --gap: 2px;
     --radius: 6px;
 }
@@ -47,9 +48,10 @@ body {
     font-family: var(--font-main);
     background: var(--c-bg);
     color: var(--c-text);
-    min-height: 100dvh;
+    height: 100dvh;
     display: flex;
     flex-direction: column;
+    overflow: hidden;
 }
 
 /* ── Header ────────────────────────────────────────────────────────────── */
@@ -57,147 +59,190 @@ body {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    padding: 12px 24px;
+    padding: 10px 24px;
     background: var(--c-surface);
     border-bottom: 1px solid var(--c-border);
+    flex-shrink: 0;
 }
 
 #app-header h1 {
-    font-size: 1.3rem;
+    font-size: 1.2rem;
     font-weight: 700;
-    letter-spacing: 0.03em;
+    letter-spacing: .03em;
 }
 
-#app-header .accent { color: var(--c-accent); }
+#app-header .accent {
+    color: var(--c-accent);
+}
 
 #phase-label {
-    font-size: 0.8rem;
+    font-size: .75rem;
     text-transform: uppercase;
-    letter-spacing: 0.08em;
+    letter-spacing: .08em;
     color: var(--c-text-muted);
 }
 
-/* ── Main layout: boards + draft ───────────────────────────────────────── */
-#app-main {
+/* ── Board area (top) ──────────────────────────────────────────────────── */
+#board-area {
     flex: 1;
     display: flex;
-    gap: 16px;
-    padding: 16px;
-    overflow: auto;
-    justify-content: center;
     align-items: flex-start;
+    justify-content: center;
+    gap: 0;
+    padding: 20px 24px 8px;
+    min-height: 0;
 }
 
-/* ── Player sections ───────────────────────────────────────────────────── */
-.player-section {
+/* Player panels */
+.player-panel {
     display: flex;
     flex-direction: column;
-    gap: 8px;
-    border: 2px solid var(--c-border);
-    border-radius: var(--radius);
-    padding: 10px;
-    background: var(--c-surface);
-    transition: border-color 0.25s, box-shadow 0.25s;
+    gap: 6px;
+    transition: opacity .25s;
 }
 
-.player-section.active {
-    box-shadow: 0 0 16px rgba(255, 255, 255, 0.06);
+.player-panel.inactive {
+    opacity: .45;
 }
 
-#player-P1.active { border-color: var(--c-p1); }
-#player-P2.active { border-color: var(--c-p2); }
-
-.player-section.inactive {
-    opacity: 0.5;
-    pointer-events: none;
-}
-
-.player-header {
+.panel-header {
     display: flex;
-    justify-content: space-between;
     align-items: baseline;
+    justify-content: space-between;
+    padding: 0 4px;
 }
 
 .player-name {
-    font-size: 0.85rem;
+    font-size: .8rem;
     font-weight: 700;
     text-transform: uppercase;
-    letter-spacing: 0.06em;
+    letter-spacing: .06em;
 }
 
-#player-P1 .player-name { color: var(--c-p1); }
-#player-P2 .player-name { color: var(--c-p2); }
+#player-P1 .player-name {
+    color: var(--c-p1);
+}
+
+#player-P2 .player-name {
+    color: var(--c-p2);
+}
 
 .player-score {
-    font-size: 1.4rem;
+    font-size: 1.2rem;
     font-weight: 700;
     color: var(--c-crown);
-    min-width: 3ch;
-    text-align: right;
 }
 
-/* ── Game boards ───────────────────────────────────────────────────────── */
+/* Board frame — dashed border, no visible grid */
+.board-frame {
+    border: 2px dashed var(--c-border);
+    border-radius: var(--radius);
+    padding: 4px;
+    transition: border-color .25s;
+}
+
+.player-panel.active .board-frame {
+    border-color: rgba(255, 255, 255, .2);
+}
+
+/* Game board grid — transparent background so empty cells are invisible */
 .game-board {
     display: grid;
-    grid-template-columns: repeat(9, var(--cell-size));
-    grid-template-rows: repeat(9, var(--cell-size));
+    grid-template-columns: repeat(9, var(--cell));
+    grid-template-rows: repeat(9, var(--cell));
     gap: var(--gap);
-    background: var(--c-border);
-    border: 2px solid var(--c-border);
-    border-radius: var(--radius);
-    padding: var(--gap);
 }
 
+/* Cells — empty cells are invisible */
 .cell {
-    width: var(--cell-size);
-    height: var(--cell-size);
-    background: var(--c-surface);
+    width: var(--cell);
+    height: var(--cell);
+    background: transparent;
     border-radius: 3px;
     display: flex;
     flex-direction: column;
     align-items: center;
     justify-content: center;
-    cursor: pointer;
     position: relative;
-    transition: background 0.15s;
-    font-size: 0.5rem;
+    font-size: .5rem;
     font-weight: 600;
     text-transform: uppercase;
-    letter-spacing: 0.04em;
-    color: rgba(255, 255, 255, 0.8);
-    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
+    letter-spacing: .04em;
+    color: rgba(255, 255, 255, .8);
+    text-shadow: 0 1px 2px rgba(0, 0, 0, .5);
     user-select: none;
 }
 
-.cell:hover {
-    outline: 2px solid rgba(255, 255, 255, 0.3);
-    outline-offset: -2px;
+/* Only show terrain cells */
+.cell[data-terrain="wheat"] {
+    background: var(--c-wheat);
 }
 
+.cell[data-terrain="forest"] {
+    background: var(--c-forest);
+}
+
+.cell[data-terrain="water"] {
+    background: var(--c-water);
+}
+
+.cell[data-terrain="grassland"] {
+    background: var(--c-grassland);
+}
+
+.cell[data-terrain="swamp"] {
+    background: var(--c-swamp);
+}
+
+.cell[data-terrain="mine"] {
+    background: var(--c-mine);
+}
+
+.cell[data-terrain="castle"] {
+    background: var(--c-castle);
+    color: #333;
+    text-shadow: none;
+    font-size: .9rem;
+}
+
+/* Placement preview */
 .cell.preview-valid {
     outline: 2px solid var(--c-grassland);
     outline-offset: -2px;
-    box-shadow: inset 0 0 12px var(--c-valid);
+    box-shadow: inset 0 0 14px var(--c-valid);
+    background: rgba(126, 200, 80, .15);
 }
 
 .cell.preview-invalid {
     outline: 2px solid var(--c-accent);
     outline-offset: -2px;
-    box-shadow: inset 0 0 12px var(--c-invalid);
+    box-shadow: inset 0 0 14px var(--c-invalid);
+    background: rgba(233, 69, 96, .1);
 }
 
-/* Terrain cell colours */
-.cell[data-terrain="wheat"]     { background: var(--c-wheat); }
-.cell[data-terrain="forest"]    { background: var(--c-forest); }
-.cell[data-terrain="water"]     { background: var(--c-water); }
-.cell[data-terrain="grassland"] { background: var(--c-grassland); }
-.cell[data-terrain="swamp"]     { background: var(--c-swamp); }
-.cell[data-terrain="mine"]      { background: var(--c-mine); }
-.cell[data-terrain="castle"]    {
-    background: var(--c-castle);
-    color: #333;
-    text-shadow: none;
-    font-size: 1rem;
+/* Bonded domino visuals */
+.cell[data-bond-dir="right"] {
+    border-top-right-radius: 0;
+    border-bottom-right-radius: 0;
+    margin-right: calc(var(--gap) * -1 - 1px);
+    z-index: 1;
+}
+
+.cell[data-bond-dir="left"] {
+    border-top-left-radius: 0;
+    border-bottom-left-radius: 0;
+}
+
+.cell[data-bond-dir="down"] {
+    border-bottom-left-radius: 0;
+    border-bottom-right-radius: 0;
+    margin-bottom: calc(var(--gap) * -1 - 1px);
+    z-index: 1;
+}
+
+.cell[data-bond-dir="up"] {
+    border-top-left-radius: 0;
+    border-top-right-radius: 0;
 }
 
 /* Crown indicators */
@@ -213,232 +258,420 @@ body {
     height: 7px;
     border-radius: 50%;
     background: var(--c-crown);
-    border: 1px solid rgba(0, 0, 0, 0.3);
-    box-shadow: 0 0 3px rgba(255, 215, 0, 0.5);
+    border: 1px solid rgba(0, 0, 0, .3);
+    box-shadow: 0 0 3px rgba(255, 215, 0, .5);
 }
 
-/* ── Drafting area ─────────────────────────────────────────────────────── */
-#draft-section {
+/* ── Center zone (meeple home) ─────────────────────────────────────────── */
+#center-zone {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    align-self: center;
+    min-width: 100px;
+    padding: 0 16px;
+}
+
+#meeple-home {
+    width: 80px;
+    height: 80px;
+    background: var(--c-surface);
+    border: 2px solid var(--c-border);
+    border-radius: var(--radius);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+}
+
+/* Meeple tokens */
+.meeple-token {
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    border: 3px solid rgba(255, 255, 255, .25);
+    flex-shrink: 0;
+    transition: transform .15s, opacity .2s, box-shadow .2s;
+}
+
+#meeple-P1 {
+    background: var(--c-p1);
+}
+
+#meeple-P2 {
+    background: var(--c-p2);
+}
+
+.meeple-token.active-meeple {
+    cursor: grab;
+    box-shadow: 0 0 10px rgba(255, 255, 255, .25);
+    animation: pulse 1.5s ease-in-out infinite;
+}
+
+.meeple-token.active-meeple:hover {
+    transform: scale(1.2);
+}
+
+.meeple-token.inactive-meeple {
+    opacity: .25;
+    pointer-events: none;
+}
+
+@keyframes pulse {
+
+    0%,
+    100% {
+        box-shadow: 0 0 6px rgba(255, 255, 255, .15);
+    }
+
+    50% {
+        box-shadow: 0 0 16px rgba(255, 255, 255, .4);
+    }
+}
+
+/* Meeple ghost */
+#meeple-ghost {
+    position: fixed;
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    border: 3px solid rgba(255, 255, 255, .5);
+    pointer-events: none;
+    z-index: 1000;
+    opacity: .85;
+}
+
+#meeple-ghost[data-player="P1"] {
+    background: var(--c-p1);
+}
+
+#meeple-ghost[data-player="P2"] {
+    background: var(--c-p2);
+}
+
+/* ── Draft strip (bottom) — distinct panel ─────────────────────────────── */
+#draft-strip {
+    flex-shrink: 0;
+    padding: 10px 24px 14px;
     display: flex;
     flex-direction: column;
-    gap: 12px;
-    min-width: 220px;
-    max-width: 260px;
-    padding-top: 4px;
-}
-
-#controls {
-    display: flex;
-    flex-wrap: wrap;
     gap: 8px;
+    background: var(--c-surface);
+    border-top: 1px solid var(--c-border);
+    /* Fixed height so rotation doesn't push other UI around */
+    min-height: 160px;
+}
+
+#strip-controls {
+    display: flex;
     align-items: center;
+    gap: 12px;
 }
 
-#controls button {
-    padding: 6px 14px;
-    border: 1px solid var(--c-border);
-    border-radius: var(--radius);
-    background: var(--c-surface-alt);
-    color: var(--c-text);
-    font-family: var(--font-main);
-    font-size: 0.8rem;
-    font-weight: 600;
-    cursor: pointer;
-    transition: background 0.15s, border-color 0.15s;
-}
-
-#controls button:hover {
-    background: var(--c-accent);
-    border-color: var(--c-accent);
-}
-
-#rotation-indicator {
-    font-size: 0.75rem;
-    color: var(--c-text-muted);
-}
-
-#rotation-name {
-    font-weight: 600;
-    color: var(--c-text);
-}
-
-/* Turn indicator */
 #turn-indicator {
     display: flex;
-    flex-direction: column;
     align-items: center;
-    gap: 2px;
-    padding: 8px 12px;
+    gap: 8px;
+    padding: 6px 16px;
     border-radius: var(--radius);
     background: var(--c-surface-alt);
     border: 1px solid var(--c-border);
 }
 
 #turn-player {
-    font-size: 1rem;
+    font-size: .9rem;
     font-weight: 700;
 }
 
 #turn-action {
-    font-size: 0.7rem;
+    font-size: .65rem;
     color: var(--c-text-muted);
     text-transform: uppercase;
-    letter-spacing: 0.06em;
+    letter-spacing: .06em;
 }
 
-/* Message bar */
-#message-bar {
-    min-height: 36px;
-    padding: 6px 10px;
-    border-radius: var(--radius);
-    font-size: 0.75rem;
-    line-height: 1.4;
-    background: var(--c-surface);
+#btn-rotate {
+    padding: 6px 14px;
     border: 1px solid var(--c-border);
+    border-radius: var(--radius);
+    background: var(--c-surface-alt);
+    color: var(--c-text);
+    font-family: var(--font-main);
+    font-size: .75rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background .15s, border-color .15s;
+}
+
+#btn-rotate:hover {
+    background: var(--c-accent);
+    border-color: var(--c-accent);
+}
+
+/* Draft row — horizontal tile strips */
+#draft-row {
+    display: flex;
+    gap: 32px;
+    align-items: flex-start;
+}
+
+.line-group {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.line-label {
+    font-size: .65rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: .08em;
     color: var(--c-text-muted);
-    transition: background 0.2s, color 0.2s;
+}
+
+.tile-row {
+    display: flex;
+    gap: 10px;
+    /* Tall enough for a vertically-rotated tile (2 halves stacked = ~92px) */
+    min-height: 96px;
+    align-items: center;
+}
+
+/* Fixed-size tile slot placeholders */
+.draft-tile-slot {
+    width: 92px;
+    height: 92px; /* matches rotated tile height */
+    border-radius: 4px;
+    flex-shrink: 0;
+}
+.draft-tile-slot.empty {
+    /* Resolved tile: invisible gap */
+}
+.draft-tile-slot.dragging-gap {
+    /* Tile being dragged: dashed outline shows where it came from */
+    border: 2px dashed var(--c-border);
+}
+
+/* Draft tiles — horizontal domino pieces */
+.draft-tile {
+    display: flex;
+    border-radius: 4px;
+    overflow: hidden;
+    border: 2px solid var(--c-border);
+    position: relative;
+    cursor: grab;
+    transition: transform .12s, border-color .15s, opacity .15s;
+    flex-shrink: 0;
+}
+
+.draft-tile[data-rotation="0"] {
+    flex-direction: row;
+}
+
+.draft-tile[data-rotation="1"] {
+    flex-direction: column;
+}
+
+.draft-tile[data-rotation="2"] {
+    flex-direction: row-reverse;
+}
+
+.draft-tile[data-rotation="3"] {
+    flex-direction: column-reverse;
+}
+
+.draft-tile:hover {
+    transform: scale(1.06);
+}
+
+.draft-tile:active {
+    cursor: grabbing;
+}
+
+.draft-tile.available {
+    border-color: rgba(126, 200, 80, .5);
+}
+
+.draft-tile.available:hover {
+    border-color: var(--c-grassland);
+}
+
+.draft-tile.claimed {
+    opacity: .35;
+    pointer-events: none;
+}
+
+.draft-tile.highlight {
+    border-color: var(--c-crown);
+    box-shadow: 0 0 10px rgba(255, 215, 0, .25);
+}
+
+.draft-tile.drop-target {
+    border-color: var(--c-crown);
+    box-shadow: 0 0 12px rgba(255, 215, 0, .3);
+}
+
+.draft-tile-half {
+    width: 44px;
+    height: 44px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    position: relative;
+    font-size: .45rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: .04em;
+    color: rgba(255, 255, 255, .85);
+    text-shadow: 0 1px 2px rgba(0, 0, 0, .5);
+}
+
+.draft-tile-half[data-terrain="wheat"] {
+    background: var(--c-wheat);
+}
+
+.draft-tile-half[data-terrain="forest"] {
+    background: var(--c-forest);
+}
+
+.draft-tile-half[data-terrain="water"] {
+    background: var(--c-water);
+}
+
+.draft-tile-half[data-terrain="grassland"] {
+    background: var(--c-grassland);
+}
+
+.draft-tile-half[data-terrain="swamp"] {
+    background: var(--c-swamp);
+}
+
+.draft-tile-half[data-terrain="mine"] {
+    background: var(--c-mine);
+}
+
+.draft-tile-half .crowns {
+    position: absolute;
+    top: 1px;
+}
+
+.draft-tile-half .crown-dot {
+    width: 6px;
+    height: 6px;
+}
+
+/* Meeple circle on draft tiles */
+.tile-meeple {
+    position: absolute;
+    right: 4px;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    border: 2px solid rgba(255, 255, 255, .5);
+    z-index: 2;
+}
+
+.tile-meeple[data-player="P1"] {
+    background: var(--c-p1);
+}
+
+.tile-meeple[data-player="P2"] {
+    background: var(--c-p2);
+}
+
+/* ── Tile ghost (follows cursor during drag) ───────────────────────────── */
+#tile-ghost {
+    position: fixed;
+    display: flex;
+    pointer-events: none;
+    z-index: 1000;
+    opacity: .85;
+    border: 2px solid var(--c-crown);
+    border-radius: 4px;
+    overflow: hidden;
+    filter: drop-shadow(0 4px 16px rgba(0, 0, 0, .6));
+}
+
+#tile-ghost[data-rotation="0"] {
+    flex-direction: row;
+}
+
+#tile-ghost[data-rotation="1"] {
+    flex-direction: column;
+}
+
+#tile-ghost[data-rotation="2"] {
+    flex-direction: row-reverse;
+}
+
+#tile-ghost[data-rotation="3"] {
+    flex-direction: column-reverse;
+}
+
+.ghost-half {
+    width: var(--cell);
+    height: var(--cell);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    position: relative;
+}
+
+.ghost-half[data-terrain="wheat"] {
+    background: var(--c-wheat);
+}
+
+.ghost-half[data-terrain="forest"] {
+    background: var(--c-forest);
+}
+
+.ghost-half[data-terrain="water"] {
+    background: var(--c-water);
+}
+
+.ghost-half[data-terrain="grassland"] {
+    background: var(--c-grassland);
+}
+
+.ghost-half[data-terrain="swamp"] {
+    background: var(--c-swamp);
+}
+
+.ghost-half[data-terrain="mine"] {
+    background: var(--c-mine);
+}
+
+/* ── Message bar ───────────────────────────────────────────────────────── */
+#message-bar {
+    min-height: 24px;
+    padding: 4px 10px;
+    border-radius: var(--radius);
+    font-size: .7rem;
+    line-height: 1.4;
+    background: transparent;
+    color: var(--c-text-muted);
 }
 
 #message-bar.error {
     background: var(--c-accent-soft);
     color: var(--c-accent);
-    border-color: var(--c-accent);
 }
 
 #message-bar.success {
-    background: rgba(126, 200, 80, 0.12);
+    background: rgba(126, 200, 80, .1);
     color: var(--c-grassland);
-    border-color: var(--c-grassland);
 }
 
-/* Draft lines */
-#draft-lines {
-    display: flex;
-    gap: 12px;
-}
-
-.draft-column {
-    flex: 1;
-    display: flex;
-    flex-direction: column;
-    gap: 6px;
-}
-
-.draft-heading {
-    font-size: 0.7rem;
-    font-weight: 600;
-    text-transform: uppercase;
-    letter-spacing: 0.08em;
-    color: var(--c-text-muted);
-    text-align: center;
-}
-
-.draft-line {
-    display: flex;
-    flex-direction: column;
-    gap: 5px;
-}
-
-/* Individual draft slot */
-.draft-slot {
-    display: flex;
-    align-items: center;
-    gap: 4px;
-    border-radius: var(--radius);
-    overflow: hidden;
-    border: 2px solid var(--c-border);
-    cursor: pointer;
-    transition: border-color 0.15s, transform 0.1s;
-    position: relative;
-}
-
-.draft-slot:hover {
-    border-color: var(--c-text-muted);
-}
-
-.draft-slot.highlight {
-    border-color: var(--c-crown);
-    box-shadow: 0 0 8px rgba(255, 215, 0, 0.2);
-}
-
-.draft-slot.available {
-    border-color: rgba(126, 200, 80, 0.5);
-}
-
-.draft-slot.available:hover {
-    border-color: var(--c-grassland);
-    transform: scale(1.03);
-}
-
-.draft-slot.claimed {
-    opacity: 0.4;
-    pointer-events: none;
-}
-
-.draft-slot-half {
-    flex: 1;
-    aspect-ratio: 1;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    font-size: 0.45rem;
-    font-weight: 600;
-    text-transform: uppercase;
-    letter-spacing: 0.04em;
-    color: rgba(255, 255, 255, 0.85);
-    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
-    position: relative;
-    min-height: 32px;
-}
-
-.draft-slot-half[data-terrain="wheat"]     { background: var(--c-wheat); }
-.draft-slot-half[data-terrain="forest"]    { background: var(--c-forest); }
-.draft-slot-half[data-terrain="water"]     { background: var(--c-water); }
-.draft-slot-half[data-terrain="grassland"] { background: var(--c-grassland); }
-.draft-slot-half[data-terrain="swamp"]     { background: var(--c-swamp); }
-.draft-slot-half[data-terrain="mine"]      { background: var(--c-mine); }
-
-.draft-slot-half .crowns {
-    position: absolute;
-    top: 1px;
-}
-
-.draft-slot-half .crown-dot {
-    width: 6px;
-    height: 6px;
-}
-
-/* Meeple indicator on draft slots */
-.meeple-tag {
-    position: absolute;
-    right: 3px;
-    top: 50%;
-    transform: translateY(-50%);
-    font-size: 0.55rem;
-    font-weight: 700;
-    padding: 1px 4px;
-    border-radius: 3px;
-    color: #fff;
-    z-index: 1;
-}
-
-.meeple-tag.P1 { background: var(--c-p1); }
-.meeple-tag.P2 { background: var(--c-p2); }
-
-/* ── Scrollbar styling ─────────────────────────────────────────────────── */
-::-webkit-scrollbar { width: 5px; }
-::-webkit-scrollbar-track { background: var(--c-surface); border-radius: 3px; }
-::-webkit-scrollbar-thumb { background: var(--c-border); border-radius: 3px; }
-
-/* ── Game over overlay ─────────────────────────────────────────────────── */
+/* ── Game over ─────────────────────────────────────────────────────────── */
 .game-over-banner {
     text-align: center;
     padding: 16px;
     background: var(--c-surface-alt);
     border: 2px solid var(--c-crown);
     border-radius: var(--radius);
-    margin-top: 8px;
 }
 
 .game-over-banner h2 {
@@ -448,6 +681,21 @@ body {
 }
 
 .game-over-banner p {
-    font-size: 0.85rem;
+    font-size: .85rem;
     color: var(--c-text);
+}
+
+/* Scrollbar */
+::-webkit-scrollbar {
+    width: 5px;
+}
+
+::-webkit-scrollbar-track {
+    background: var(--c-surface);
+    border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb {
+    background: var(--c-border);
+    border-radius: 3px;
 }
