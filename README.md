@@ -1,3 +1,33 @@
+## Peer Review
+
+Hey there, i would really appreciate review for the main logic parts, specifically game.js but frontend help is always appreciated too!
+
+
+Sry if its a little confusing, game logic is split up into different files to make it easier to manage.
+
+domino.js is what powers the tiles that are used in the game. they appear at the bottom and can be placed on the grid
+
+Board.js defines a board - seperate so that different amounts of players can be used later
+
+game.js is the game state machine for a 2 player version
+
+scoring.js is the scoring algorithm
+
+### Playing
+there isn't really an onboarding/guide yet but you can find the rules here: https://themindcafe.com.sg/wp-content/uploads/1970/01/Kingdomino.pdf
+
+it can be a little confusing at first with the tiles and the boards but the tiles are dragged on the board when you want to place them. Enjoy :)
+
+
+
+
+
+
+
+
+
+
+
 [![Review Assignment Due Date](https://classroom.github.com/assets/deadline-readme-button-22041afd0340ce965d47ae6ef1cefeee28c7c493a6346c4f15d667ab976d596c.svg)](https://classroom.github.com/a/H6lPFq0J)
 # Computing 2 Coursework Submission.
 **CID**: [YOUR CID]
