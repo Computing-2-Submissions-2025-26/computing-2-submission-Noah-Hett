@@ -166,11 +166,42 @@ const validate_placement = function (board, domino, row, col, rotation) {
     if (width > 5 || height > 5) {
         return {
             valid: false,
-            reason: `Placement exceeds 5×5 limit (${width}×${height}).`
+            reason: `Placement exceeds 5x5 limit (${width}x${height}).`
         };
     }
 
     return { valid: true, reason: "Valid placement." };
+};
+
+// ─── Visible bounds (dynamic placement area) ────────────────────────────────
+
+/**
+ * Compute the visible row/col range for the board based on the 5×5
+ * bounding constraint.  Returns the min/max row and column indices
+ * that could still participate in a legal placement.
+ *
+ * @param {Array[]} board
+ * @returns {{ minRow: number, maxRow: number, minCol: number, maxCol: number }}
+ */
+const get_valid_bounds = function (board) {
+    const occupied = get_occupied_coords(board);
+    if (occupied.length === 0) {
+        return { minRow: 0, maxRow: GRID_SIZE - 1,
+                 minCol: 0, maxCol: GRID_SIZE - 1 };
+    }
+    const rows = R.map(R.head, occupied);
+    const cols = R.map(R.last, occupied);
+    const occMinR = Math.min(...rows);
+    const occMaxR = Math.max(...rows);
+    const occMinC = Math.min(...cols);
+    const occMaxC = Math.max(...cols);
+
+    return {
+        minRow: Math.max(0, occMaxR - 4),
+        maxRow: Math.min(GRID_SIZE - 1, occMinR + 4),
+        minCol: Math.max(0, occMaxC - 4),
+        maxCol: Math.min(GRID_SIZE - 1, occMinC + 4),
+    };
 };
 
 // ─── Domino placement ───────────────────────────────────────────────────────
@@ -231,6 +262,7 @@ export {
     get_occupied_coords,
     get_neighbours,
     validate_placement,
+    get_valid_bounds,
     clone_board,
     place_domino
 };

@@ -8,7 +8,7 @@
  */
 
 import { get_secondary_offset } from "./Domino.js";
-import { GRID_SIZE, get_cell, validate_placement } from "./Board.js";
+import { GRID_SIZE, get_cell, validate_placement, get_valid_bounds } from "./Board.js";
 import { score_board } from "./Scoring.js";
 import {
     PHASES,
@@ -24,30 +24,19 @@ const ROTATION_NAMES = ["Right", "Down", "Left", "Up"];
 
 let state = create_game(2);
 let rotation = 0;
+let visual_rotation_deg = 0;
 
 // Tile drag state
 let drag_active = false;
 let hover_row = null;
 let hover_col = null;
-const CELL = 44; // keep in sync with --cell CSS variable
-
-// Cursor anchor offsets per rotation [offsetX, offsetY]
-// Anchors cursor to the centre of the PRIMARY half of the ghost
-const GHOST_OFFSETS = [
-    [CELL / 2, CELL / 2], // 0 right  — primary is left half
-    [CELL / 2, CELL / 2], // 1 down   — primary is top half
-    [CELL + CELL / 2, CELL / 2], // 2 left   — primary is right half
-    [CELL / 2, CELL + CELL / 2], // 3 up     — primary is bottom half
-];
-
 let last_x = 0;
 let last_y = 0;
 
 // Meeple drag state
 let meeple_drag_active = false;
 
-// Placement log for bonded domino visuals (view-only, never enters Game.js)
-const placement_log = { P1: [], P2: [] };
+
 
 // ─── DOM refs ───────────────────────────────────────────────────────────────
 
@@ -76,34 +65,43 @@ function show_message(text, type) {
     msg_el.className = type || "";
 }
 
-// ─── Bond map ───────────────────────────────────────────────────────────────
 
-function build_bond_map(pid) {
-    const map = new Map();
-    const dirs = ["right", "down", "left", "up"];
-    placement_log[pid].forEach((e) => {
-        const dr = e.secondaryRow - e.primaryRow;
-        const dc = e.secondaryCol - e.primaryCol;
-        let di = -1;
-        if (dr === 0 && dc === 1) { di = 0; }
-        else if (dr === 1 && dc === 0) { di = 1; }
-        else if (dr === 0 && dc === -1) { di = 2; }
-        else if (dr === -1 && dc === 0) { di = 3; }
-        if (di >= 0) {
-            map.set(`${e.primaryRow},${e.primaryCol}`, dirs[di]);
-            map.set(`${e.secondaryRow},${e.secondaryCol}`, dirs[(di + 2) % 4]);
-        }
-    });
-    return map;
-}
 
 // ─── Board rendering ────────────────────────────────────────────────────────
 
 function render_board(pid) {
     const el = document.getElementById(`board-${pid}`);
     const player = get_player(state, pid);
-    const bonds = build_bond_map(pid);
+    const bounds = get_valid_bounds(player.board);
     el.innerHTML = "";
+
+    // Always keep the internal grid statically 9x9 so tiles never shift relative to it
+    el.style.gridTemplateColumns = `repeat(${GRID_SIZE}, var(--cell))`;
+    el.style.gridTemplateRows = `repeat(${GRID_SIZE}, var(--cell))`;
+    el.style.width = `calc(${GRID_SIZE} * var(--cell) + (${GRID_SIZE} - 1) * var(--gap))`;
+    el.style.height = `calc(${GRID_SIZE} * var(--cell) + (${GRID_SIZE} - 1) * var(--gap))`;
+
+    // Shift the grid inside the frame to align the bounds with the top-left corner
+    el.style.transform = `translate(
+        calc(${bounds.minCol} * (var(--cell) + var(--gap)) * -1),
+        calc(${bounds.minRow} * (var(--cell) + var(--gap)) * -1)
+    )`;
+
+    // Dynamically size the frame and offset it with margins to keep tiles perfectly stationary
+    const frame = el.parentElement;
+    if (frame) {
+        const rowCount = bounds.maxRow - bounds.minRow + 1;
+        const colCount = bounds.maxCol - bounds.minCol + 1;
+
+        frame.style.width = `calc(${colCount} * var(--cell) + (${colCount} - 1) * var(--gap) + var(--board-pad) * 2 + 4px)`;
+        frame.style.height = `calc(${rowCount} * var(--cell) + (${rowCount} - 1) * var(--gap) + var(--board-pad) * 2 + 4px)`;
+
+        // Margins compensate for cropped rows/cols so the layout footprint is always 9x9
+        frame.style.marginLeft = `calc(${bounds.minCol} * (var(--cell) + var(--gap)))`;
+        frame.style.marginRight = `calc(${GRID_SIZE - 1 - bounds.maxCol} * (var(--cell) + var(--gap)))`;
+        frame.style.marginTop = `calc(${bounds.minRow} * (var(--cell) + var(--gap)))`;
+        frame.style.marginBottom = `calc(${GRID_SIZE - 1 - bounds.maxRow} * (var(--cell) + var(--gap)))`;
+    }
 
     for (let r = 0; r < GRID_SIZE; r++) {
         for (let c = 0; c < GRID_SIZE; c++) {
@@ -120,10 +118,17 @@ function render_board(pid) {
                     ? "🏰"
                     : render_crowns(cell.crowns)
                     + `<span class="terrain-label">${cell.terrain}</span>`;
-                const bond = bonds.get(`${r},${c}`);
-                if (bond) {
-                    div.dataset.bondDir = bond;
-                }
+
+                // Terrain merging: check 4 neighbours for same terrain
+                const terrain = cell.terrain;
+                const up = get_cell(player.board, r - 1, c);
+                const down = get_cell(player.board, r + 1, c);
+                const left = get_cell(player.board, r, c - 1);
+                const right = get_cell(player.board, r, c + 1);
+                if (up && up.terrain === terrain) { div.dataset.mergeUp = ""; }
+                if (down && down.terrain === terrain) { div.dataset.mergeDown = ""; }
+                if (left && left.terrain === terrain) { div.dataset.mergeLeft = ""; }
+                if (right && right.terrain === terrain) { div.dataset.mergeRight = ""; }
             }
 
             // Drag-drop target: mouseup places tile, mouseenter shows preview
@@ -166,6 +171,9 @@ function render_boards() {
             p2.classList.add("active");
             p1.classList.add("inactive");
         }
+    } else if (state.phase === PHASES.DRAFT_INITIAL || state.phase === PHASES.RESOLVE_DRAFT) {
+        p1.classList.add("inactive");
+        p2.classList.add("inactive");
     }
 }
 
@@ -226,6 +234,16 @@ function make_draft_tile(slot, index, line_type) {
 let dragging_index = -1;
 
 function render_draft_lines() {
+    // Dim inactive tile groups to reduce confusion
+    const current_group = document.getElementById("current-group");
+    const next_group = document.getElementById("next-group");
+    
+    const is_draft_phase = state.phase === PHASES.DRAFT_INITIAL
+        || state.phase === PHASES.RESOLVE_DRAFT;
+        
+    if (current_group) current_group.classList.toggle("dimmed", is_draft_phase);
+    if (next_group) next_group.classList.toggle("dimmed", !is_draft_phase && state.phase !== PHASES.GAME_OVER);
+
     // ── Current line: always 4 fixed slots ──
     current_line_el.innerHTML = "";
     state.current_line.forEach((slot, i) => {
@@ -256,6 +274,8 @@ function render_draft_lines() {
             && state.phase === PHASES.RESOLVE_PLACE) {
             el.classList.add("highlight");
             el.dataset.rotation = rotation;
+            el.style.transform = `rotate(${visual_rotation_deg}deg)`;
+            el.style.setProperty("--rotation-deg", `${visual_rotation_deg}deg`);
             el.addEventListener("mousedown", (e) => {
                 e.preventDefault();
                 dragging_index = i;
@@ -301,6 +321,8 @@ function start_tile_drag(e, domino) {
     ghost_el = document.createElement("div");
     ghost_el.id = "tile-ghost";
     ghost_el.dataset.rotation = rotation;
+    ghost_el.style.transform = `rotate(${visual_rotation_deg}deg)`;
+    ghost_el.style.setProperty("--rotation-deg", `${visual_rotation_deg}deg`);
 
     const p = document.createElement("div");
     p.className = "ghost-half";
@@ -322,7 +344,8 @@ function move_ghost(x, y) {
     if (!ghost_el) { return; }
     last_x = x;
     last_y = y;
-    const [ox, oy] = GHOST_OFFSETS[rotation];
+    const ox = ghost_el.offsetWidth / 2;
+    const oy = ghost_el.offsetHeight / 2;
     ghost_el.style.left = `${x - ox}px`;
     ghost_el.style.top = `${y - oy}px`;
 }
@@ -352,6 +375,9 @@ function render_meeples() {
 
     ["P1", "P2"].forEach((pid) => {
         const token = document.getElementById(`meeple-${pid}`);
+        if (!token) {
+            return;
+        }
         const fresh = token.cloneNode(true);
         fresh.classList.remove("active-meeple", "inactive-meeple");
 
@@ -408,13 +434,11 @@ function confirm_placement(row, col) {
         return;
     }
 
-    const [dr, dc] = get_secondary_offset(rotation);
-    placement_log[pid].push({
-        primaryRow: row, primaryCol: col,
-        secondaryRow: row + dr, secondaryCol: col + dc
-    });
+
 
     state = new_state;
+    rotation = 0;
+    visual_rotation_deg = 0;
     cancel_drag();
     show_message(state.message, "success");
     render_all();
@@ -439,14 +463,21 @@ function handle_meeple_drop(i) {
 
 function rotate_tile() {
     rotation = (rotation + 1) % 4;
+    visual_rotation_deg += 90;
 
     // Update the in-strip tile to show the new rotation
     const active_tile_el = document.querySelector(".draft-tile.highlight");
-    if (active_tile_el) { active_tile_el.dataset.rotation = rotation; }
+    if (active_tile_el) {
+        active_tile_el.dataset.rotation = rotation;
+        active_tile_el.style.setProperty("--rotation-deg", `${visual_rotation_deg}deg`);
+        active_tile_el.style.transform = `rotate(${visual_rotation_deg}deg)`;
+    }
 
     // Update ghost and re-anchor at the last known cursor position
     if (ghost_el) {
         ghost_el.dataset.rotation = rotation;
+        ghost_el.style.setProperty("--rotation-deg", `${visual_rotation_deg}deg`);
+        ghost_el.style.transform = `rotate(${visual_rotation_deg}deg)`;
         move_ghost(last_x, last_y);
     }
 
@@ -460,7 +491,10 @@ function rotate_tile() {
 
 function render_scores() {
     state.players.forEach((p) => {
-        document.getElementById(`score-${p.id}`).textContent = p.score;
+        const el = document.getElementById(`score-${p.id}`);
+        if (el) {
+            el.textContent = p.score;
+        }
     });
 }
 
@@ -471,7 +505,9 @@ function render_phase() {
         [PHASES.RESOLVE_DRAFT]: "Draft Next Tile",
         [PHASES.GAME_OVER]: "Game Over"
     };
-    phase_el.textContent = names[state.phase] || state.phase;
+    if (phase_el) {
+        phase_el.textContent = names[state.phase] || state.phase;
+    }
 }
 
 function render_turn() {

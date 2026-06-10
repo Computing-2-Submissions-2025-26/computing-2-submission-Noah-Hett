@@ -1,5 +1,6 @@
-/* ─── Kingdomino 2-Player — Board-Top / Draft-Bottom Layout ──────────────
-   Invisible grid, horizontal tile rows, drag-only placement.
+/* ─── Kingdomino 2-Player — Responsive Layout ────────────────────────────
+   Boards fill available space, draft tiles sit in a bottom bar with
+   meeples centred between current and next tile groups.
    ──────────────────────────────────────────────────────────────────────── */
 
 *,
@@ -10,38 +11,78 @@
     padding: 0;
 }
 
-:root {
-    --font-main: "Inter", system-ui, sans-serif;
+@font-face {
+    font-family: 'Righteous';
+    src: url('assets/Righteous.ttf') format('truetype');
+    font-weight: normal;
+    font-style: normal;
+}
 
-    /* Terrain colours */
+:root {
+    --font-display: "Jacquard 12", system-ui, sans-serif;
+    --font-main: "Righteous", system-ui, sans-serif;
+
+    /* ── Terrain colours ── */
     --c-wheat: #E8B84B;
     --c-forest: #2D6A2E;
     --c-water: #3B82C8;
     --c-grassland: #7EC850;
     --c-swamp: #6B5B3A;
     --c-mine: #4A4A4A;
-    --c-castle: #F5F5F5;
+    --c-castle: #5C5C5C;
 
-    /* Player colours */
+    /* ── Terrain shadow colours (darkened) ── */
+    --c-wheat-shadow: #A07A2E;
+    --c-forest-shadow: #1A4A1B;
+    --c-water-shadow: #255080;
+    --c-grassland-shadow: #4A8A2A;
+    --c-swamp-shadow: #3E3520;
+    --c-mine-shadow: #2A2A2A;
+    --c-castle-shadow: #333333;
+
+    /* ── Player colours ── */
     --c-p1: #E91E63;
     --c-p2: #2196F3;
 
-    /* UI */
-    --c-bg: #1a1a2e;
-    --c-surface: #16213e;
-    --c-surface-alt: #0f3460;
-    --c-text: #e0e0e0;
+    /* ── UI colours ── */
+    --c-bg: #574638;
+    --c-surface: #1E1510;
+    --c-surface-alt: #0c0a09;
+    --c-text: #FAFAD5;
     --c-text-muted: #8a8a9e;
-    --c-accent: #e94560;
-    --c-accent-soft: rgba(233, 69, 96, 0.15);
-    --c-border: #2a2a4a;
+    --c-accent: #3872CA;
+    --c-accent-soft: rgba(56, 114, 202, 0.15);
+    --c-border: #2D2927;
     --c-crown: #FFD700;
     --c-valid: rgba(126, 200, 80, 0.4);
     --c-invalid: rgba(233, 69, 96, 0.3);
 
-    --cell: 44px;
+    /* ── Text sizes ── */
+    --text-sm: .2rem;
+    --text-md: 8px;
+    --text-lg: 40px;
+
+    /* ── Layout tuning knobs ──
+       Change any of these and --cell recalculates automatically. */
+    --page-pad: 24px;
+    --board-gap: 40px;
+    --board-pad: 4px;
+    --header-h: 64px;
+    --strip-h: 300px;
     --gap: 2px;
-    --radius: 6px;
+    --radius: 4px;
+
+    /* ── Dynamically computed board cell size ──
+       Width:  viewport - 2×page-pad - board-gap - 4×board-pad, divided by 18 cells + 16 gaps
+       Height: viewport - header - strip - 2×page-pad - 2×board-pad, divided by 9 cells + 8 gaps */
+    --cell: clamp(28px,
+            min(calc((100vw - var(--page-pad) * 2 - var(--board-gap) - var(--board-pad) * 4 - var(--gap) * 16) / 18),
+                calc((100dvh - var(--header-h) - var(--strip-h) - var(--page-pad) - var(--board-pad) * 2 - var(--gap) * 8) / 9)),
+            80px);
+
+    /* ── Draft tile sizing ──
+       Tiles in the strip are smaller than board cells. */
+    --draft-cell: clamp(24px, calc(var(--cell)), 55px);
 }
 
 body {
@@ -58,38 +99,32 @@ body {
 #app-header {
     display: flex;
     align-items: center;
-    justify-content: space-between;
-    padding: 10px 24px;
+    justify-content: center;
+    padding: 0 var(--page-pad);
+    height: var(--header-h);
     background: var(--c-surface);
     border-bottom: 1px solid var(--c-border);
     flex-shrink: 0;
 }
 
 #app-header h1 {
-    font-size: 1.2rem;
-    font-weight: 700;
-    letter-spacing: .03em;
+    font-family: var(--font-display);
+    font-size: var(--text-lg);
 }
 
 #app-header .accent {
     color: var(--c-accent);
 }
 
-#phase-label {
-    font-size: .75rem;
-    text-transform: uppercase;
-    letter-spacing: .08em;
-    color: var(--c-text-muted);
-}
 
-/* ── Board area (top) ──────────────────────────────────────────────────── */
+/* ── Board area ────────────────────────────────────────────────────────── */
 #board-area {
     flex: 1;
     display: flex;
-    align-items: flex-start;
+    align-items: center;
     justify-content: center;
-    gap: 0;
-    padding: 20px 24px 8px;
+    gap: var(--board-gap);
+    padding: calc(var(--page-pad) / 2) var(--page-pad);
     min-height: 0;
 }
 
@@ -98,11 +133,14 @@ body {
     display: flex;
     flex-direction: column;
     gap: 6px;
-    transition: opacity .25s;
+    /* Fast, immediate fade-in when becoming active */
+    transition: opacity .25s ease;
 }
 
 .player-panel.inactive {
     opacity: .45;
+    /* Delayed, slower fade-out when becoming inactive */
+    transition: opacity .4s ease 0.75s;
 }
 
 .panel-header {
@@ -113,22 +151,21 @@ body {
 }
 
 .player-name {
-    font-size: .8rem;
-    font-weight: 700;
+    font-size: var(--text-md);
     text-transform: uppercase;
-    letter-spacing: .06em;
+    padding-bottom: 5px;
 }
 
 #player-P1 .player-name {
-    color: var(--c-p1);
+    color: var(--c-text);
 }
 
 #player-P2 .player-name {
-    color: var(--c-p2);
+    color: var(--c-text);
 }
 
 .player-score {
-    font-size: 1.2rem;
+    font-size: var(--text-md);
     font-weight: 700;
     color: var(--c-crown);
 }
@@ -137,8 +174,9 @@ body {
 .board-frame {
     border: 2px dashed var(--c-border);
     border-radius: var(--radius);
-    padding: 4px;
-    transition: border-color .25s;
+    padding: var(--board-pad);
+    transition: border-color .25s ease .75s, width .35s ease .3s, height .35s ease .3s, margin .35s ease .3s;
+    overflow: hidden;
 }
 
 .player-panel.active .board-frame {
@@ -148,23 +186,23 @@ body {
 /* Game board grid — transparent background so empty cells are invisible */
 .game-board {
     display: grid;
-    grid-template-columns: repeat(9, var(--cell));
-    grid-template-rows: repeat(9, var(--cell));
+    /* columns and rows set dynamically by JS via inline style */
     gap: var(--gap);
+    transition: transform .35s ease .3s;
 }
 
-/* Cells — empty cells are invisible */
+/* ── Board cells ──────────────────────────────────────────────────────── */
 .cell {
     width: var(--cell);
     height: var(--cell);
     background: transparent;
-    border-radius: 3px;
+    border-radius: var(--radius);
     display: flex;
     flex-direction: column;
     align-items: center;
     justify-content: center;
     position: relative;
-    font-size: .5rem;
+    font-size: var(--text-sm);
     font-weight: 600;
     text-transform: uppercase;
     letter-spacing: .04em;
@@ -173,36 +211,66 @@ body {
     user-select: none;
 }
 
-/* Only show terrain cells */
-.cell[data-terrain="wheat"] {
+/* Terrain colours (shared between board cells, draft tiles, and ghost) */
+[data-terrain="wheat"] {
     background: var(--c-wheat);
 }
 
-.cell[data-terrain="forest"] {
+[data-terrain="forest"] {
     background: var(--c-forest);
 }
 
-.cell[data-terrain="water"] {
+[data-terrain="water"] {
     background: var(--c-water);
 }
 
-.cell[data-terrain="grassland"] {
+[data-terrain="grassland"] {
     background: var(--c-grassland);
 }
 
-.cell[data-terrain="swamp"] {
+[data-terrain="swamp"] {
     background: var(--c-swamp);
 }
 
-.cell[data-terrain="mine"] {
+[data-terrain="mine"] {
     background: var(--c-mine);
 }
 
 .cell[data-terrain="castle"] {
     background: var(--c-castle);
+    border: 2px solid #6b6b6b;
     color: #333;
     text-shadow: none;
-    font-size: .9rem;
+    font-size: var(--text-md);
+}
+
+/* ── Per-terrain drop shadows (2×2 solid offset) ──────────────────────── */
+.cell[data-terrain="wheat"] {
+    box-shadow: 4px 4px 0 var(--c-wheat-shadow);
+}
+
+.cell[data-terrain="forest"] {
+    box-shadow: 4px 4px 0 var(--c-forest-shadow);
+}
+
+.cell[data-terrain="water"] {
+    box-shadow: 4px 4px 0 var(--c-water-shadow);
+}
+
+.cell[data-terrain="grassland"] {
+    box-shadow: 4px 4px 0 var(--c-grassland-shadow);
+}
+
+.cell[data-terrain="swamp"] {
+    box-shadow: 4px 4px 0 var(--c-swamp-shadow);
+}
+
+.cell[data-terrain="mine"] {
+    box-shadow: 4px 4px 0 var(--c-mine-shadow);
+}
+
+.cell[data-terrain="castle"] {
+    box-shadow: 4px 4px 0 var(--c-castle-shadow);
 }
 
 /* Placement preview */
@@ -214,33 +282,35 @@ body {
 }
 
 .cell.preview-invalid {
-    outline: 2px solid var(--c-accent);
+    outline: 2px solid var(--c-invalid);
     outline-offset: -2px;
     box-shadow: inset 0 0 14px var(--c-invalid);
     background: rgba(233, 69, 96, .1);
 }
 
-/* Bonded domino visuals */
-.cell[data-bond-dir="right"] {
+/* ── Terrain merge visuals ─────────────────────────────────────────────── */
+/* Right edge merge: remove radius, eat the gap */
+.cell[data-merge-right] {
     border-top-right-radius: 0;
     border-bottom-right-radius: 0;
-    margin-right: calc(var(--gap) * -1 - 1px);
-    z-index: 1;
+    width: calc(var(--cell) + var(--gap));
 }
 
-.cell[data-bond-dir="left"] {
+/* Left edge merge: remove radius only (gap eaten by left neighbour) */
+.cell[data-merge-left] {
     border-top-left-radius: 0;
     border-bottom-left-radius: 0;
 }
 
-.cell[data-bond-dir="down"] {
+/* Bottom edge merge: remove radius, eat the gap */
+.cell[data-merge-down] {
     border-bottom-left-radius: 0;
     border-bottom-right-radius: 0;
-    margin-bottom: calc(var(--gap) * -1 - 1px);
-    z-index: 1;
+    height: calc(var(--cell) + var(--gap));
 }
 
-.cell[data-bond-dir="up"] {
+/* Top edge merge: remove radius only (gap eaten by top neighbour) */
+.cell[data-merge-up] {
     border-top-left-radius: 0;
     border-top-right-radius: 0;
 }
@@ -262,26 +332,262 @@ body {
     box-shadow: 0 0 3px rgba(255, 215, 0, .5);
 }
 
-/* ── Center zone (meeple home) ─────────────────────────────────────────── */
-#center-zone {
+/* ── Draft strip (bottom) ──────────────────────────────────────────────── */
+#draft-strip {
+    flex-shrink: 0;
+    padding: 8px var(--page-pad) 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    background: var(--c-surface);
+    border-top: 1px solid var(--c-border);
+}
+
+#strip-controls {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+#turn-indicator {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 16px;
+    border-radius: var(--radius);
+    background: var(--c-surface-alt);
+    border: 1px solid var(--c-border);
+}
+
+#turn-player {
+    font-size: var(--text-md);
+    font-weight: 700;
+}
+
+#turn-action {
+    font-size: var(--text-md);
+    color: var(--c-text-muted);
+    text-transform: uppercase;
+    letter-spacing: .06em;
+}
+
+#btn-rotate {
+    padding: 6px 14px;
+    border: 1px solid var(--c-border);
+    border-radius: var(--radius);
+    background: var(--c-surface-alt);
+    color: var(--c-text-muted);
+    font-family: var(--font-main);
+    font-size: var(--text-md);
+    font-weight: 600;
+    cursor: pointer;
+    transition: background .15s, border-color .15s;
+}
+
+#btn-rotate:hover {
+    background: var(--c-accent);
+    border-color: var(--c-accent);
+}
+
+/* Draft row — current | meeples | next */
+#draft-row {
     display: flex;
     align-items: center;
     justify-content: center;
-    align-self: center;
-    min-width: 100px;
-    padding: 0 16px;
+    gap: 24px;
+}
+
+.line-group {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.line-label {
+    font-size: var(--text-md);
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: .08em;
+    color: var(--c-text);
+}
+
+.tile-row {
+    display: flex;
+    gap: 8px;
+    /* Tall enough for a vertically-rotated draft tile */
+    min-height: calc(var(--draft-cell) * 2 + 8px);
+    align-items: center;
+}
+
+/* Fixed-size tile slot placeholders */
+.draft-tile-slot {
+    width: calc(var(--draft-cell) * 2 + 4px);
+    height: calc(var(--draft-cell) * 2 + 4px);
+    border-radius: 4px;
+    flex-shrink: 0;
+}
+
+.draft-tile-slot.empty {
+    /* Resolved tile: invisible gap */
+}
+
+.draft-tile-slot.dragging-gap {
+    border: 2px dashed var(--c-border);
+}
+
+/* Draft tiles — horizontal domino pieces at reduced scale */
+.draft-tile {
+    display: flex;
+    flex-direction: row;
+    border-radius: 4px;
+    overflow: hidden;
+    border: 2px solid var(--c-border);
+    position: relative;
+    cursor: grab;
+    transition: transform 0.25s cubic-bezier(0.4, 0, 0.2, 1), border-color 0.15s, opacity 0.15s;
+    flex-shrink: 0;
+    transform-origin: center center;
+}
+
+.draft-tile[data-rotation="0"] {
+    transform: rotate(var(--rotation-deg, 0deg));
+}
+
+.draft-tile[data-rotation="1"] {
+    transform: rotate(var(--rotation-deg, 90deg));
+}
+
+.draft-tile[data-rotation="2"] {
+    transform: rotate(var(--rotation-deg, 180deg));
+}
+
+.draft-tile[data-rotation="3"] {
+    transform: rotate(var(--rotation-deg, 270deg));
+}
+
+.draft-tile:hover {
+    transform: rotate(var(--rotation-deg, 0deg)) scale(1.06);
+}
+
+.draft-tile[data-rotation="0"]:hover {
+    transform: rotate(var(--rotation-deg, 0deg)) scale(1.06);
+}
+
+.draft-tile[data-rotation="1"]:hover {
+    transform: rotate(var(--rotation-deg, 90deg)) scale(1.06);
+}
+
+.draft-tile[data-rotation="2"]:hover {
+    transform: rotate(var(--rotation-deg, 180deg)) scale(1.06);
+}
+
+.draft-tile[data-rotation="3"]:hover {
+    transform: rotate(var(--rotation-deg, 270deg)) scale(1.06);
+}
+
+.draft-tile:active {
+    cursor: grabbing;
+}
+
+.draft-tile.available {
+    border-color: rgba(126, 200, 80, .5);
+}
+
+.draft-tile.available:hover {
+    border-color: var(--c-grassland);
+}
+
+.draft-tile.claimed {
+    opacity: .35;
+    pointer-events: none;
+}
+
+.draft-tile.highlight {
+    border-color: var(--c-crown);
+    box-shadow: 0 0 10px rgba(255, 215, 0, .25);
+}
+
+.draft-tile.drop-target {
+    border-color: var(--c-crown);
+    box-shadow: 0 0 12px rgba(255, 215, 0, .3);
+}
+
+/* Draft tile halves — use --draft-cell for in-strip size */
+.draft-tile-half {
+    width: var(--draft-cell);
+    height: var(--draft-cell);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    position: relative;
+    font-size: var(--text-sm);
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: .04em;
+    color: rgba(255, 255, 255, .85);
+    text-shadow: 0 1px 2px rgba(0, 0, 0, .5);
+}
+
+.draft-tile-half .crowns {
+    position: absolute;
+    top: 1px;
+}
+
+.draft-tile-half .crown-dot {
+    width: 6px;
+    height: 6px;
+}
+
+/* Meeple circle on draft tiles */
+.tile-meeple {
+    position: absolute;
+    right: 4px;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    border: 2px solid rgba(255, 255, 255, .5);
+    z-index: 2;
+}
+
+.tile-meeple[data-player="P1"] {
+    background: var(--c-p1);
+}
+
+.tile-meeple[data-player="P2"] {
+    background: var(--c-p2);
+}
+
+/* ── Dimming during off-phases ──────────────────────────── */
+.line-group.dimmed .draft-tile {
+    opacity: 0.3;
+    pointer-events: none;
+}
+
+.line-group.dimmed .draft-tile-slot {
+    opacity: 0.3;
+}
+
+/* ── Meeple zone (in bottom bar) ───────────────────────────────────────── */
+#meeple-zone {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    align-self: flex-end;
+    padding-bottom: 4px;
 }
 
 #meeple-home {
-    width: 80px;
-    height: 80px;
-    background: var(--c-surface);
-    border: 2px solid var(--c-border);
+    padding: 8px 12px;
+    background: var(--c-surface-alt);
+    border: 1px solid var(--c-border);
     border-radius: var(--radius);
     display: flex;
     align-items: center;
     justify-content: center;
-    gap: 8px;
+    gap: 10px;
 }
 
 /* Meeple tokens */
@@ -349,243 +655,12 @@ body {
     background: var(--c-p2);
 }
 
-/* ── Draft strip (bottom) — distinct panel ─────────────────────────────── */
-#draft-strip {
-    flex-shrink: 0;
-    padding: 10px 24px 14px;
-    display: flex;
-    flex-direction: column;
-    gap: 8px;
-    background: var(--c-surface);
-    border-top: 1px solid var(--c-border);
-    /* Fixed height so rotation doesn't push other UI around */
-    min-height: 160px;
-}
-
-#strip-controls {
-    display: flex;
-    align-items: center;
-    gap: 12px;
-}
-
-#turn-indicator {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    padding: 6px 16px;
-    border-radius: var(--radius);
-    background: var(--c-surface-alt);
-    border: 1px solid var(--c-border);
-}
-
-#turn-player {
-    font-size: .9rem;
-    font-weight: 700;
-}
-
-#turn-action {
-    font-size: .65rem;
-    color: var(--c-text-muted);
-    text-transform: uppercase;
-    letter-spacing: .06em;
-}
-
-#btn-rotate {
-    padding: 6px 14px;
-    border: 1px solid var(--c-border);
-    border-radius: var(--radius);
-    background: var(--c-surface-alt);
-    color: var(--c-text);
-    font-family: var(--font-main);
-    font-size: .75rem;
-    font-weight: 600;
-    cursor: pointer;
-    transition: background .15s, border-color .15s;
-}
-
-#btn-rotate:hover {
-    background: var(--c-accent);
-    border-color: var(--c-accent);
-}
-
-/* Draft row — horizontal tile strips */
-#draft-row {
-    display: flex;
-    gap: 32px;
-    align-items: flex-start;
-}
-
-.line-group {
-    display: flex;
-    flex-direction: column;
-    gap: 4px;
-}
-
-.line-label {
-    font-size: .65rem;
-    font-weight: 600;
-    text-transform: uppercase;
-    letter-spacing: .08em;
-    color: var(--c-text-muted);
-}
-
-.tile-row {
-    display: flex;
-    gap: 10px;
-    /* Tall enough for a vertically-rotated tile (2 halves stacked = ~92px) */
-    min-height: 96px;
-    align-items: center;
-}
-
-/* Fixed-size tile slot placeholders */
-.draft-tile-slot {
-    width: 92px;
-    height: 92px; /* matches rotated tile height */
-    border-radius: 4px;
-    flex-shrink: 0;
-}
-.draft-tile-slot.empty {
-    /* Resolved tile: invisible gap */
-}
-.draft-tile-slot.dragging-gap {
-    /* Tile being dragged: dashed outline shows where it came from */
-    border: 2px dashed var(--c-border);
-}
-
-/* Draft tiles — horizontal domino pieces */
-.draft-tile {
-    display: flex;
-    border-radius: 4px;
-    overflow: hidden;
-    border: 2px solid var(--c-border);
-    position: relative;
-    cursor: grab;
-    transition: transform .12s, border-color .15s, opacity .15s;
-    flex-shrink: 0;
-}
-
-.draft-tile[data-rotation="0"] {
-    flex-direction: row;
-}
-
-.draft-tile[data-rotation="1"] {
-    flex-direction: column;
-}
-
-.draft-tile[data-rotation="2"] {
-    flex-direction: row-reverse;
-}
-
-.draft-tile[data-rotation="3"] {
-    flex-direction: column-reverse;
-}
-
-.draft-tile:hover {
-    transform: scale(1.06);
-}
-
-.draft-tile:active {
-    cursor: grabbing;
-}
-
-.draft-tile.available {
-    border-color: rgba(126, 200, 80, .5);
-}
-
-.draft-tile.available:hover {
-    border-color: var(--c-grassland);
-}
-
-.draft-tile.claimed {
-    opacity: .35;
-    pointer-events: none;
-}
-
-.draft-tile.highlight {
-    border-color: var(--c-crown);
-    box-shadow: 0 0 10px rgba(255, 215, 0, .25);
-}
-
-.draft-tile.drop-target {
-    border-color: var(--c-crown);
-    box-shadow: 0 0 12px rgba(255, 215, 0, .3);
-}
-
-.draft-tile-half {
-    width: 44px;
-    height: 44px;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    position: relative;
-    font-size: .45rem;
-    font-weight: 600;
-    text-transform: uppercase;
-    letter-spacing: .04em;
-    color: rgba(255, 255, 255, .85);
-    text-shadow: 0 1px 2px rgba(0, 0, 0, .5);
-}
-
-.draft-tile-half[data-terrain="wheat"] {
-    background: var(--c-wheat);
-}
-
-.draft-tile-half[data-terrain="forest"] {
-    background: var(--c-forest);
-}
-
-.draft-tile-half[data-terrain="water"] {
-    background: var(--c-water);
-}
-
-.draft-tile-half[data-terrain="grassland"] {
-    background: var(--c-grassland);
-}
-
-.draft-tile-half[data-terrain="swamp"] {
-    background: var(--c-swamp);
-}
-
-.draft-tile-half[data-terrain="mine"] {
-    background: var(--c-mine);
-}
-
-.draft-tile-half .crowns {
-    position: absolute;
-    top: 1px;
-}
-
-.draft-tile-half .crown-dot {
-    width: 6px;
-    height: 6px;
-}
-
-/* Meeple circle on draft tiles */
-.tile-meeple {
-    position: absolute;
-    right: 4px;
-    top: 50%;
-    transform: translateY(-50%);
-    width: 18px;
-    height: 18px;
-    border-radius: 50%;
-    border: 2px solid rgba(255, 255, 255, .5);
-    z-index: 2;
-}
-
-.tile-meeple[data-player="P1"] {
-    background: var(--c-p1);
-}
-
-.tile-meeple[data-player="P2"] {
-    background: var(--c-p2);
-}
-
 /* ── Tile ghost (follows cursor during drag) ───────────────────────────── */
+/* Ghost uses full --cell size so it matches the board grid exactly */
 #tile-ghost {
     position: fixed;
     display: flex;
+    flex-direction: row;
     pointer-events: none;
     z-index: 1000;
     opacity: .85;
@@ -593,22 +668,24 @@ body {
     border-radius: 4px;
     overflow: hidden;
     filter: drop-shadow(0 4px 16px rgba(0, 0, 0, .6));
+    transition: transform 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+    transform-origin: center center;
 }
 
 #tile-ghost[data-rotation="0"] {
-    flex-direction: row;
+    transform: rotate(var(--rotation-deg, 0deg));
 }
 
 #tile-ghost[data-rotation="1"] {
-    flex-direction: column;
+    transform: rotate(var(--rotation-deg, 90deg));
 }
 
 #tile-ghost[data-rotation="2"] {
-    flex-direction: row-reverse;
+    transform: rotate(var(--rotation-deg, 180deg));
 }
 
 #tile-ghost[data-rotation="3"] {
-    flex-direction: column-reverse;
+    transform: rotate(var(--rotation-deg, 270deg));
 }
 
 .ghost-half {
@@ -620,36 +697,13 @@ body {
     position: relative;
 }
 
-.ghost-half[data-terrain="wheat"] {
-    background: var(--c-wheat);
-}
-
-.ghost-half[data-terrain="forest"] {
-    background: var(--c-forest);
-}
-
-.ghost-half[data-terrain="water"] {
-    background: var(--c-water);
-}
-
-.ghost-half[data-terrain="grassland"] {
-    background: var(--c-grassland);
-}
-
-.ghost-half[data-terrain="swamp"] {
-    background: var(--c-swamp);
-}
-
-.ghost-half[data-terrain="mine"] {
-    background: var(--c-mine);
-}
-
 /* ── Message bar ───────────────────────────────────────────────────────── */
 #message-bar {
+    margin-left: auto;
     min-height: 24px;
     padding: 4px 10px;
     border-radius: var(--radius);
-    font-size: .7rem;
+    font-size: var(--text-md);
     line-height: 1.4;
     background: transparent;
     color: var(--c-text-muted);
@@ -676,16 +730,16 @@ body {
 
 .game-over-banner h2 {
     color: var(--c-crown);
-    font-size: 1.1rem;
+    font-size: var(--text-lg);
     margin-bottom: 4px;
 }
 
 .game-over-banner p {
-    font-size: .85rem;
+    font-size: var(--text-md);
     color: var(--c-text);
 }
 
-/* Scrollbar */
+/* ── Scrollbar ─────────────────────────────────────────────────────────── */
 ::-webkit-scrollbar {
     width: 5px;
 }
