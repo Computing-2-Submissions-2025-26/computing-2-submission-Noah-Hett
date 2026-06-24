@@ -1,27 +1,73 @@
 /**
  * Game.js — Game state machine for 2-player Kingdomino.
  *
- * Layers on top of Board.js, Scoring.js, and Domino.js to manage
- * multi-player state, deck shuffling, and the drafting loop.
+ * Layers on top of {@link module:Board}, {@link module:Scoring}, and
+ * {@link module:Domino} to manage multi-player state, deck shuffling,
+ * and the draft-then-place loop.
  *
- * All public functions are **pure** — they take a game state and
+ * All public functions are **pure** — they accept a game state and
  * return a new game state, never mutating the original.
  *
  * @module Game
  */
 
 import R from "./ramda.js";
-import { build_deck } from "./Domino.js";
+import {build_deck} from "./Domino.js";
 import {
     GRID_SIZE,
     create_board,
     validate_placement,
     place_domino
 } from "./Board.js";
-import { score_board } from "./Scoring.js";
+import {score_board} from "./Scoring.js";
+
+// ─── Type definitions ───────────────────────────────────────────────────────
+
+/**
+ * The four phases of a Kingdomino game.
+ * @typedef {"DRAFT_INITIAL"|"RESOLVE_PLACE"|"RESOLVE_DRAFT"|"GAME_OVER"} Phase
+ */
+
+/**
+ * A slot in the draft line pairing a domino with a meeple claim.
+ * @typedef  {Object} DraftSlot
+ * @property {import("./Domino.js").Domino} domino - The tile.
+ * @property {string|null} meeple - Player id who claimed this slot,
+ *   or `null` if unclaimed.
+ */
+
+/**
+ * A player's state within the game.
+ * @typedef  {Object} Player
+ * @property {string} id    - e.g. "P1".
+ * @property {string} color - CSS hex colour.
+ * @property {string} name  - Display name.
+ * @property {import("./Board.js").Board} board - The player's kingdom.
+ * @property {number} score - Current score.
+ */
+
+/**
+ * Complete snapshot of a Kingdomino game.
+ * @typedef  {Object} GameState
+ * @property {Player[]}    players
+ * @property {import("./Domino.js").Domino[]} deck
+ * @property {DraftSlot[]} current_line
+ * @property {DraftSlot[]} next_line
+ * @property {number}      current_line_index
+ * @property {Phase}       phase
+ * @property {string}      active_player_id
+ * @property {number}      round
+ * @property {string[]}    meeple_order
+ * @property {number}      meeple_order_index
+ * @property {string}      message
+ */
 
 // ─── Constants ──────────────────────────────────────────────────────────────
 
+/**
+ * Enum of game phases.
+ * @type {Object.<string, Phase>}
+ */
 const PHASES = Object.freeze({
     DRAFT_INITIAL: "DRAFT_INITIAL",
     RESOLVE_PLACE: "RESOLVE_PLACE",
@@ -29,77 +75,121 @@ const PHASES = Object.freeze({
     GAME_OVER: "GAME_OVER"
 });
 
+/**
+ * Default player configurations.
+ * @type {Array.<{id: string, color: string, name: string}>}
+ */
 const PLAYER_CONFIGS = Object.freeze([
-    { id: "P1", color: "#E91E63", name: "Player 1" },
-    { id: "P2", color: "#2196F3", name: "Player 2" }
+    {id: "P1", color: "#E91E63", name: "Player 1"},
+    {id: "P2", color: "#2196F3", name: "Player 2"}
 ]);
 
+/** Number of tiles dealt per round. @constant {number} */
 const TILES_PER_DEAL = 4;
+
+/** Meeples each player contributes to the draft. @constant {number} */
 const MEEPLES_PER_PLAYER = 2;
 
 // ─── Pure helpers ───────────────────────────────────────────────────────────
 
 /**
- * Fisher-Yates shuffle. Returns a new array — does not mutate.
- * @param {Array} array
- * @returns {Array}
+ * Fisher–Yates shuffle.  Returns a **new** array — the original is
+ * not mutated.
+ *
+ * @param {Array} array - The array to shuffle.
+ * @returns {Array} A shuffled shallow copy.
  */
-const shuffle_array = (array) => {
-    const out = [...array];
-    for (let i = out.length - 1; i > 0; i -= 1) {
-        const j = Math.floor(Math.random() * (i + 1));
-        [out[i], out[j]] = [out[j], out[i]];
-    }
+const shuffle_array = function (array) {
+    const out = array.slice();
+    R.forEach(
+        function (i) {
+            const j = Math.floor(Math.random() * (i + 1));
+            const tmp = out[i];
+            out[i] = out[j];
+            out[j] = tmp;
+        },
+        R.reverse(R.range(1, out.length))
+    );
     return out;
 };
 
 /**
- * Check whether a domino can be legally placed ANYWHERE on a board
- * (any cell, any rotation). Used for forced-discard detection.
- * @param {Array[]} board
- * @param {Object}  domino
- * @returns {boolean}
+ * Check whether a domino can be legally placed **anywhere** on a
+ * board (any cell, any rotation).  Used for forced-discard detection.
+ *
+ * @param {import("./Board.js").Board} board
+ * @param {import("./Domino.js").Domino} domino
+ * @returns {boolean} `true` if at least one legal placement exists.
  */
-const has_valid_placement = (board, domino) => {
-    for (let r = 0; r < GRID_SIZE; r += 1) {
-        for (let c = 0; c < GRID_SIZE; c += 1) {
-            for (let rot = 0; rot < 4; rot += 1) {
-                if (validate_placement(board, domino, r, c, rot).valid) {
-                    return true;
-                }
-            }
-        }
-    }
-    return false;
+const has_valid_placement = (board, domino) => R.any(
+    (r) => R.any(
+        (c) => R.any(
+            (rot) => validate_placement(board, domino, r, c, rot).valid,
+            R.range(0, 4)
+        ),
+        R.range(0, GRID_SIZE)
+    ),
+    R.range(0, GRID_SIZE)
+);
+
+/**
+ * Look up a {@link Player} by id.
+ *
+ * @param {GameState} state
+ * @param {string}    pid
+ * @returns {Player}
+ */
+const get_player = (state, pid) => state.players.find(
+    (p) => p.id === pid
+);
+
+/**
+ * Return a new state with one player's board (and score) replaced.
+ *
+ * @param {GameState} state
+ * @param {string}    pid
+ * @param {import("./Board.js").Board} new_board
+ * @returns {GameState}
+ */
+const update_player = function (state, pid, new_board) {
+    return Object.assign({}, state, {
+        players: state.players.map((p) => (
+            p.id === pid
+            ? Object.assign({}, p, {
+                board: new_board,
+                score: score_board(new_board)
+            })
+            : p
+        ))
+    });
 };
 
-/** Look up a player object by id. */
-const get_player = (state, pid) => state.players.find((p) => p.id === pid);
-
-/** Return a new state with one player's board (and score) replaced. */
-const update_player_board = (state, pid, new_board) => ({
-    ...state,
-    players: state.players.map((p) =>
-        (p.id === pid
-            ? { ...p, board: new_board, score: score_board(new_board) }
-            : p)
-    )
-});
-
-/** Deal 4 tiles from the deck, sorted by id. Returns { line, deck }. */
-const deal_from_deck = (deck) => {
+/**
+ * Deal 4 tiles from the deck, sorted by tile id.
+ *
+ * @param {import("./Domino.js").Domino[]} deck
+ * @returns {{ line: DraftSlot[], deck: import("./Domino.js").Domino[] }}
+ */
+const deal_from_deck = function (deck) {
     if (deck.length < TILES_PER_DEAL) {
-        return { line: [], deck };
+        return {line: [], deck};
     }
     const dealt = R.sortBy(R.prop("id"), deck.slice(0, TILES_PER_DEAL));
     const remaining = deck.slice(TILES_PER_DEAL);
-    const line = dealt.map((d) => ({ domino: d, meeple: null }));
-    return { line, deck: remaining };
+    const line = dealt.map((d) => ({domino: d, meeple: null}));
+    return {line, deck: remaining};
 };
 
 // ─── State creation ─────────────────────────────────────────────────────────
 
-/** Create a player with a fresh board. */
+/**
+ * Create a player with a fresh board.
+ *
+ * @param {string} id    - Player identifier.
+ * @param {string} color - CSS hex colour.
+ * @param {string} name  - Display name.
+ * @returns {Player}
+ */
 const create_player = (id, color, name) => ({
     id,
     color,
@@ -110,11 +200,19 @@ const create_player = (id, color, name) => ({
 
 /**
  * Create the initial game state for a 2-player game.
- * Shuffles the full 48-tile deck, takes 24, deals the first 4
- * to next_line, and randomises the initial meeple order.
  *
- * @param {number} [player_count=2]
- * @returns {Object} Initial game state.
+ * Shuffles the full 48-tile deck, keeps 24 (12 × player_count),
+ * deals the first 4 to `next_line`, and randomises the initial
+ * meeple order.
+ *
+ * @param {number} [player_count=2] - Number of players.
+ * @returns {GameState} The opening game state.
+ *
+ * @example
+ * const game = create_game(2);
+ * game.phase;              // "DRAFT_INITIAL"
+ * game.next_line.length;   // 4
+ * game.players.length;     // 2
  */
 const create_game = function (player_count = 2) {
     const shuffled = shuffle_array(build_deck());
@@ -129,10 +227,10 @@ const create_game = function (player_count = 2) {
         player_count
     );
 
-    // Deal first 4 to next_line
-    const { line: next_line, deck } = deal_from_deck(game_tiles);
+    const deal_result = deal_from_deck(game_tiles);
+    const next_line = deal_result.line;
+    const deck = deal_result.deck;
 
-    // Randomise initial meeple order: [P1, P1, P2, P2] shuffled
     const meeple_order = shuffle_array(
         R.chain((p) => R.repeat(p.id, MEEPLES_PER_PLAYER), players)
     );
@@ -155,8 +253,11 @@ const create_game = function (player_count = 2) {
 // ─── Phase transitions ──────────────────────────────────────────────────────
 
 /**
- * Check if the active player has any valid placement for their tile.
- * If not, auto-discard and advance to the draft sub-phase (or next turn).
+ * If the active player has no valid placement for their tile,
+ * auto-discard and advance to the draft sub-phase (or next turn).
+ *
+ * @param {GameState} state
+ * @returns {GameState}
  */
 const check_auto_discard = function (state) {
     if (state.phase !== PHASES.RESOLVE_PLACE) {
@@ -169,29 +270,34 @@ const check_auto_discard = function (state) {
         return state;
     }
 
-    // No valid placement — forced discard
-    const msg = `${player.id}: No valid placement for tile `
-        + `#${slot.domino.id}. Discarded.`;
+    const msg = `${player.id}: No valid placement for tile #${slot.domino.id}.`;
 
-    // Final round (no next_line) → skip drafting entirely
     if (state.next_line.length === 0) {
-        return advance_to_next_slot({ ...state, message: msg });
+        return advance_to_next_slot(Object.assign({}, state, {message: msg}));
     }
-    return { ...state, phase: PHASES.RESOLVE_DRAFT, message: msg };
+    return Object.assign({}, state, {
+        phase: PHASES.RESOLVE_DRAFT,
+        message: msg
+    });
 };
 
 /**
- * Transition from completed draft (initial or end-of-round) into the
- * resolve phase: next_line → current_line, deal new next_line, start
- * resolving from index 0.
+ * Transition from a completed draft into the resolve phase.
+ *
+ * Moves `next_line` → `current_line`, deals a fresh `next_line`
+ * from the deck, and begins resolving from index 0.
+ *
+ * @param {GameState} state
+ * @returns {GameState}
  */
 const start_resolve_phase = function (state) {
     const new_current = state.next_line;
-    const { line: new_next, deck: new_deck } = deal_from_deck(state.deck);
+    const deal_result = deal_from_deck(state.deck);
+    const new_next = deal_result.line;
+    const new_deck = deal_result.deck;
     const first_pid = new_current[0].meeple;
 
-    const base = {
-        ...state,
+    const base = Object.assign({}, state, {
         current_line: new_current,
         next_line: new_next,
         deck: new_deck,
@@ -200,127 +306,152 @@ const start_resolve_phase = function (state) {
         active_player_id: first_pid,
         round: state.round + 1,
         message: `${first_pid}: Place tile #${new_current[0].domino.id}.`
-    };
+    });
     return check_auto_discard(base);
 };
 
 /**
- * Advance to the next current_line slot after drafting (or after
- * placement in the final round). If all 4 are done, trigger
- * end-of-round or end-of-game.
+ * Advance to the next `current_line` slot after a placement or
+ * draft.  If all 4 are done, trigger end-of-round or end-of-game.
+ *
+ * @param {GameState} state
+ * @returns {GameState}
  */
 const advance_to_next_slot = function (state) {
     const next_idx = state.current_line_index + 1;
 
-    // All 4 slots resolved?
     if (next_idx >= TILES_PER_DEAL) {
-        // End of round
         if (state.next_line.length === 0 && state.deck.length === 0) {
-            return {
-                ...state,
+            return Object.assign({}, state, {
                 phase: PHASES.GAME_OVER,
                 message: "Game over! Final scores tallied."
-            };
+            });
         }
-        // Start next resolve phase (next_line → current, deal new next)
         return start_resolve_phase(state);
     }
 
-    // Move to next slot
     const next_slot = state.current_line[next_idx];
-    const base = {
-        ...state,
+    const base = Object.assign({}, state, {
         current_line_index: next_idx,
         phase: PHASES.RESOLVE_PLACE,
         active_player_id: next_slot.meeple,
         message: `${next_slot.meeple}: Place tile #${next_slot.domino.id}.`
-    };
+    });
     return check_auto_discard(base);
 };
 
 // ─── Player actions ─────────────────────────────────────────────────────────
 
 /**
- * Place a meeple on a next_line slot.
- * Used in both DRAFT_INITIAL and RESOLVE_DRAFT phases.
+ * Claim a `next_line` slot by placing a meeple on it.
  *
- * @param {Object} state       - Current game state.
- * @param {number} line_index  - Index into next_line (0–3).
- * @returns {Object} New game state.
+ * Used in both the initial draft and the post-placement draft.
+ *
+ * @param {GameState} state      - Current game state.
+ * @param {number}    line_index - Index into `next_line` (0–3).
+ * @returns {GameState} Updated game state.
+ *
+ * @example
+ * let game = create_game(2);
+ * game = place_meeple(game, 0);  // first player claims slot 0
+ * game.next_line[0].meeple;      // "P1" or "P2"
  */
 const place_meeple = function (state, line_index) {
-    if (state.phase !== PHASES.DRAFT_INITIAL
-        && state.phase !== PHASES.RESOLVE_DRAFT) {
-        return { ...state, message: "Not in a drafting phase." };
+    if (
+        state.phase !== PHASES.DRAFT_INITIAL
+        && state.phase !== PHASES.RESOLVE_DRAFT
+    ) {
+        return Object.assign({}, state, {message: "Not in a drafting phase."});
     }
     if (line_index < 0 || line_index >= state.next_line.length) {
-        return { ...state, message: "Invalid slot." };
+        return Object.assign({}, state, {message: "Invalid slot."});
     }
     if (state.next_line[line_index].meeple !== null) {
-        return { ...state, message: "Slot already taken." };
+        return Object.assign({}, state, {message: "Slot already taken."});
     }
 
     const pid = state.active_player_id;
-    const new_next = state.next_line.map((slot, i) =>
-        (i === line_index ? { ...slot, meeple: pid } : slot)
-    );
-    const updated = { ...state, next_line: new_next };
+    const new_next = state.next_line.map((slot, i) => (
+        i === line_index
+        ? Object.assign({}, slot, {meeple: pid})
+        : slot
+    ));
+    const updated = Object.assign({}, state, {next_line: new_next});
 
     if (state.phase === PHASES.DRAFT_INITIAL) {
-        // Advance to next meeple in the initial draft
         const next_mi = state.meeple_order_index + 1;
         if (next_mi >= state.meeple_order.length) {
-            // All meeples placed — transition to resolve
             return start_resolve_phase(updated);
         }
-        return {
-            ...updated,
+        return Object.assign({}, updated, {
             meeple_order_index: next_mi,
             active_player_id: state.meeple_order[next_mi],
             message: `${state.meeple_order[next_mi]} picks a tile.`
-        };
+        });
     }
 
-    // RESOLVE_DRAFT — advance to next current_line slot
     return advance_to_next_slot(updated);
 };
 
 /**
  * Attempt to place the active tile on the active player's board.
  *
- * @param {Object} state
- * @param {number} row
- * @param {number} col
- * @param {number} rotation  - Rotation index (0–3).
- * @returns {Object} New game state.
+ * If the placement is invalid the state is returned unchanged
+ * (with an error message).  On success the player's board and score
+ * are updated and the phase advances.
+ *
+ * @param {GameState} state
+ * @param {number}    row
+ * @param {number}    col
+ * @param {number}    rotation - Rotation index (0–3).
+ * @returns {GameState} Updated game state.
+ *
+ * @example
+ * // Assuming `state` is in RESOLVE_PLACE phase:
+ * const next = attempt_placement(state, 4, 5, 0);
+ * next.phase; // "RESOLVE_DRAFT" (on success)
  */
 const attempt_placement = function (state, row, col, rotation) {
     if (state.phase !== PHASES.RESOLVE_PLACE) {
-        return { ...state, message: "Not in placement phase." };
+        return Object.assign({}, state, {message: "Not in placement phase."});
     }
 
     const slot = state.current_line[state.current_line_index];
     const pid = state.active_player_id;
     const player = get_player(state, pid);
 
-    const result = validate_placement(player.board, slot.domino, row, col, rotation);
+    const result = validate_placement(
+        player.board,
+        slot.domino,
+        row,
+        col,
+        rotation
+    );
     if (!result.valid) {
-        return { ...state, message: result.reason };
+        return Object.assign({}, state, {message: result.reason});
     }
 
-    // Place the domino — get a new board
-    const new_board = place_domino(player.board, slot.domino, row, col, rotation);
-    let new_state = update_player_board(state, pid, new_board);
+    const new_board = place_domino(
+        player.board,
+        slot.domino,
+        row,
+        col,
+        rotation
+    );
+    const new_state = update_player(state, pid, new_board);
 
     const score = score_board(new_board);
-    new_state.message = `${pid} placed tile #${slot.domino.id}. Score: ${score}.`;
+    const msg = `${pid} placed tile #${slot.domino.id}. Score: ${score}.`;
 
-    // Final round — no drafting, advance directly
     if (new_state.next_line.length === 0) {
-        return advance_to_next_slot(new_state);
+        return advance_to_next_slot(
+            Object.assign({}, new_state, {message: msg})
+        );
     }
-    // Transition to draft sub-phase
-    return { ...new_state, phase: PHASES.RESOLVE_DRAFT };
+    return Object.assign({}, new_state, {
+        phase: PHASES.RESOLVE_DRAFT,
+        message: msg
+    });
 };
 
 export {

@@ -1,22 +1,53 @@
 /**
  * Board.js — Grid management and placement validation for Kingdomino.
  *
- * A board is a 9×9 2D array. Each cell is either `null` (empty) or an
- * object `{ terrain, crowns }`. The castle sits permanently at [4][4].
+ * A board is a 9×9 2-D array of {@link Cell} values.  Each cell is
+ * either `null` (empty) or an object with terrain and crown data.
+ * The castle occupies the centre at row 4, column 4.
  *
- * All public functions are **pure** — they take a board and return a
- * new board or a validation result, never mutating the original.
+ * All public functions are **pure** — they accept a board and return
+ * a new board or validation result, never mutating the original.
  *
  * @module Board
  */
 
 import R from "./ramda.js";
-import { get_secondary_offset } from "./Domino.js";
+import {get_secondary_offset} from "./Domino.js";
 
+// ─── Type definitions ───────────────────────────────────────────────────────
+
+/**
+ * A single cell on the board.
+ * @typedef  {Object} Cell
+ * @property {string} terrain - Terrain type (e.g. "wheat", "castle").
+ * @property {number} crowns  - Number of crowns (0–3).
+ */
+
+/**
+ * A 9×9 two-dimensional array.  Each element is either a {@link Cell}
+ * or `null` (empty).
+ * @typedef {Array.<Array.<(Cell|null)>>} Board
+ */
+
+/**
+ * Result returned by {@link validate_placement}.
+ * @typedef  {Object} ValidationResult
+ * @property {boolean} valid  - `true` when the placement is legal.
+ * @property {string}  reason - Human-readable explanation.
+ */
+
+// ─── Constants ──────────────────────────────────────────────────────────────
+
+/** Width and height of the board grid. @constant {number} */
 const GRID_SIZE = 9;
+
+/** `[row, col]` of the castle. @constant {number[]} */
 const CASTLE_POS = Object.freeze([4, 4]);
 
-// Cardinal neighbour offsets: [row, col]
+/**
+ * Cardinal-neighbour offsets: up, down, left, right.
+ * @constant {Array.<number[]>}
+ */
 const NEIGHBOUR_OFFSETS = Object.freeze([
     [-1, 0], [1, 0], [0, -1], [0, 1]
 ]);
@@ -25,44 +56,57 @@ const NEIGHBOUR_OFFSETS = Object.freeze([
 
 /**
  * Create a fresh 9×9 board with the castle placed at the centre.
- * @returns {Array[]} 9×9 2D array.
+ *
+ * @returns {Board} A new board with only the castle cell occupied.
+ *
+ * @example
+ * const board = create_board();
+ * board[4][4].terrain; // "castle"
+ * board[0][0];         // null
  */
 const create_board = function () {
-    const board = R.times(
-        () => R.times(() => null, GRID_SIZE),
+    return R.times(
+        (r) => R.times(
+            (c) => (
+                (r === CASTLE_POS[0] && c === CASTLE_POS[1])
+                ? Object.freeze({terrain: "castle", crowns: 0})
+                : null
+            ),
+            GRID_SIZE
+        ),
         GRID_SIZE
     );
-    // Place the castle — the only mutation, done once at creation.
-    board[CASTLE_POS[0]][CASTLE_POS[1]] = Object.freeze({
-        terrain: "castle",
-        crowns: 0
-    });
-    return board;
 };
 
 // ─── Cell access ────────────────────────────────────────────────────────────
 
 /**
  * Safe cell accessor — returns `null` for out-of-bounds coordinates.
- * @param {Array[]} board
- * @param {number}  row
- * @param {number}  col
- * @returns {Object|null}
+ *
+ * @param {Board}  board
+ * @param {number} row
+ * @param {number} col
+ * @returns {Cell|null}
  */
 const get_cell = (board, row, col) => (
-    row >= 0 && row < GRID_SIZE && col >= 0 && col < GRID_SIZE
-        ? board[row][col]
-        : null
+    (row >= 0 && row < GRID_SIZE && col >= 0 && col < GRID_SIZE)
+    ? board[row][col]
+    : null
 );
 
 /**
- * Return an array of [row, col] for every occupied cell on the board.
- * @param {Array[]} board
- * @returns {number[][]}
+ * Return every `[row, col]` pair that is occupied (non-null).
+ *
+ * @param {Board} board
+ * @returns {Array.<number[]>}
  */
 const get_occupied_coords = (board) => R.chain(
     (r) => R.chain(
-        (c) => (board[r][c] !== null ? [[r, c]] : []),
+        (c) => (
+            board[r][c] !== null
+            ? [[r, c]]
+            : []
+        ),
         R.range(0, GRID_SIZE)
     ),
     R.range(0, GRID_SIZE)
@@ -71,36 +115,54 @@ const get_occupied_coords = (board) => R.chain(
 // ─── Placement validation ───────────────────────────────────────────────────
 
 /**
- * Get the 4 cardinal neighbours of a cell that are non-null.
- * Returns array of { terrain, crowns, row, col } for each occupied neighbour.
+ * Get the cardinal neighbours of a cell that are occupied.
+ *
+ * @param {Board}  board
+ * @param {number} row
+ * @param {number} col
+ * @returns {Array.<Object>} Each entry has `{ terrain, crowns, row, col }`.
  */
-const get_neighbours = (board, row, col) => R.pipe(
-    R.map(([dr, dc]) => {
-        const nr = row + dr;
-        const nc = col + dc;
-        const cell = get_cell(board, nr, nc);
-        return cell ? { ...cell, row: nr, col: nc } : null;
-    }),
-    R.reject(R.isNil)
-)(NEIGHBOUR_OFFSETS);
+const get_neighbours = function (board, row, col) {
+    return R.pipe(
+        R.map(function (offset) {
+            const dr = offset[0];
+            const dc = offset[1];
+            const nr = row + dr;
+            const nc = col + dc;
+            const cell = get_cell(board, nr, nc);
+            return (
+                cell
+                ? Object.assign({}, cell, {row: nr, col: nc})
+                : null
+            );
+        }),
+        R.reject(R.isNil)
+    )(NEIGHBOUR_OFFSETS);
+};
 
 /**
- * Validate a domino placement against the three rules:
- *   1. Collision  — both target cells must be empty
- *   2. Adjacency  — at least one half must touch a matching terrain or castle
- *   3. Bounding   — all occupied cells must fit in a 5×5 rectangle
+ * Validate a domino placement against three rules:
  *
- * The adjacency check is per-edge: a half's terrain must match the
- * neighbour it is touching (e.g. forest–forest), OR the neighbour is
- * the castle. At least one such valid connection across both halves
- * is required.
+ * 1. **Collision** — both target cells must be empty and in-bounds.
+ * 2. **Adjacency** — at least one half must touch a matching terrain
+ *    or the castle.
+ * 3. **Bounding** — all occupied cells (including the new ones) must
+ *    fit inside a 5×5 rectangle.
  *
- * @param {Array[]} board
- * @param {Object}  domino    - Domino object from Domino.js
- * @param {number}  row       - Row for the primary half
- * @param {number}  col       - Column for the primary half
- * @param {number}  rotation  - Rotation index (0–3)
- * @returns {{ valid: boolean, reason: string }}
+ * @param {Board}  board    - Current board state.
+ * @param {import("./Domino.js").Domino} domino - Domino to place.
+ * @param {number} row      - Row for the primary half.
+ * @param {number} col      - Column for the primary half.
+ * @param {number} rotation - Rotation index (0–3).
+ * @returns {ValidationResult}
+ *
+ * @example
+ * const board  = create_board();
+ * const domino = { id: 1,
+ *     primary:   { terrain: "wheat", crowns: 0 },
+ *     secondary: { terrain: "wheat", crowns: 0 } };
+ * validate_placement(board, domino, 4, 5, 0);
+ * // { valid: true, reason: "Valid placement." }
  */
 const validate_placement = function (board, domino, row, col, rotation) {
     const [dr, dc] = get_secondary_offset(rotation);
@@ -108,34 +170,36 @@ const validate_placement = function (board, domino, row, col, rotation) {
     const sec_col = col + dc;
 
     // ── 1. Collision check ──
-    // Both cells must be in-bounds and empty.
     if (row < 0 || row >= GRID_SIZE || col < 0 || col >= GRID_SIZE) {
-        return { valid: false, reason: "Primary half is out of bounds." };
+        return {valid: false, reason: "Primary half is out of bounds."};
     }
-    if (sec_row < 0 || sec_row >= GRID_SIZE
-        || sec_col < 0 || sec_col >= GRID_SIZE) {
-        return { valid: false, reason: "Secondary half is out of bounds." };
+    if (
+        sec_row < 0 ||
+        sec_row >= GRID_SIZE ||
+        sec_col < 0 ||
+        sec_col >= GRID_SIZE
+    ) {
+        return {valid: false, reason: "Secondary half is out of bounds."};
     }
     if (board[row][col] !== null) {
-        return { valid: false, reason: "Primary cell is already occupied." };
+        return {valid: false, reason: "Primary cell is already occupied."};
     }
     if (board[sec_row][sec_col] !== null) {
-        return { valid: false, reason: "Secondary cell is already occupied." };
+        return {valid: false, reason: "Secondary cell is already occupied."};
     }
 
     // ── 2. Adjacency check ──
-    // For each half, check its neighbours. A valid connection means:
-    //   neighbour.terrain === half.terrain  OR  neighbour.terrain === "castle"
-    // At least ONE such connection must exist across both halves.
     const primary_neighbours = get_neighbours(board, row, col);
     const secondary_neighbours = get_neighbours(board, sec_row, sec_col);
 
     const primary_has_match = R.any(
-        (n) => n.terrain === domino.primary.terrain || n.terrain === "castle",
+        (n) => n.terrain === domino.primary.terrain
+        || n.terrain === "castle",
         primary_neighbours
     );
     const secondary_has_match = R.any(
-        (n) => n.terrain === domino.secondary.terrain || n.terrain === "castle",
+        (n) => n.terrain === domino.secondary.terrain
+        || n.terrain === "castle",
         secondary_neighbours
     );
 
@@ -146,19 +210,17 @@ const validate_placement = function (board, domino, row, col, rotation) {
         };
     }
 
-    // ── 3. 5×5 Bounding box check ──
-    // Combine all currently occupied coords with the two new ones,
-    // then check the bounding rectangle fits within 5×5.
+    // ── 3. 5×5 Bounding-box check ──
     const occupied = get_occupied_coords(board);
-    const all_coords = [...occupied, [row, col], [sec_row, sec_col]];
+    const all_coords = occupied.concat([[row, col], [sec_row, sec_col]]);
 
     const rows = R.map(R.head, all_coords);
     const cols = R.map(R.last, all_coords);
 
-    const min_row = Math.min(...rows);
-    const max_row = Math.max(...rows);
-    const min_col = Math.min(...cols);
-    const max_col = Math.max(...cols);
+    const min_row = Math.min.apply(null, rows);
+    const max_row = Math.max.apply(null, rows);
+    const min_col = Math.min.apply(null, cols);
+    const max_col = Math.max.apply(null, cols);
 
     const width = max_col - min_col + 1;
     const height = max_row - min_row + 1;
@@ -170,67 +232,81 @@ const validate_placement = function (board, domino, row, col, rotation) {
         };
     }
 
-    return { valid: true, reason: "Valid placement." };
+    return {valid: true, reason: "Valid placement."};
 };
 
-// ─── Visible bounds (dynamic placement area) ────────────────────────────────
+// ─── Visible bounds ─────────────────────────────────────────────────────────
 
 /**
- * Compute the visible row/col range for the board based on the 5×5
- * bounding constraint.  Returns the min/max row and column indices
- * that could still participate in a legal placement.
+ * Compute the row/column range that could still participate in a
+ * legal placement, given the 5×5 bounding constraint.
  *
- * @param {Array[]} board
- * @returns {{ minRow: number, maxRow: number, minCol: number, maxCol: number }}
+ * @param {Board} board
+ * @returns {{ minRow: number, maxRow: number,
+ *             minCol: number, maxCol: number }}
  */
 const get_valid_bounds = function (board) {
     const occupied = get_occupied_coords(board);
     if (occupied.length === 0) {
-        return { minRow: 0, maxRow: GRID_SIZE - 1,
-                 minCol: 0, maxCol: GRID_SIZE - 1 };
+        return {
+            minRow: 0,
+            maxRow: GRID_SIZE - 1,
+            minCol: 0,
+            maxCol: GRID_SIZE - 1
+        };
     }
     const rows = R.map(R.head, occupied);
     const cols = R.map(R.last, occupied);
-    const occMinR = Math.min(...rows);
-    const occMaxR = Math.max(...rows);
-    const occMinC = Math.min(...cols);
-    const occMaxC = Math.max(...cols);
+    const occ_min_r = Math.min.apply(null, rows);
+    const occ_max_r = Math.max.apply(null, rows);
+    const occ_min_c = Math.min.apply(null, cols);
+    const occ_max_c = Math.max.apply(null, cols);
 
     return {
-        minRow: Math.max(0, occMaxR - 4),
-        maxRow: Math.min(GRID_SIZE - 1, occMinR + 4),
-        minCol: Math.max(0, occMaxC - 4),
-        maxCol: Math.min(GRID_SIZE - 1, occMinC + 4),
+        minRow: Math.max(0, occ_max_r - 4),
+        maxRow: Math.min(GRID_SIZE - 1, occ_min_r + 4),
+        minCol: Math.max(0, occ_max_c - 4),
+        maxCol: Math.min(GRID_SIZE - 1, occ_min_c + 4)
     };
 };
 
 // ─── Domino placement ───────────────────────────────────────────────────────
 
 /**
- * Deep-clone a board (9×9 of small objects / nulls — fast enough).
- * @param {Array[]} board
- * @returns {Array[]}
+ * Deep-clone a board (9×9 of small objects / nulls).
+ *
+ * @param {Board} board
+ * @returns {Board}
  */
 const clone_board = (board) => R.map(
     (row) => R.map(
-        (cell) => (cell !== null ? { ...cell } : null),
+        (cell) => (
+            cell !== null
+            ? Object.assign({}, cell)
+            : null
+        ),
         row
     ),
     board
 );
 
 /**
- * Place a domino on the board.
- * Validates first; throws if the placement is invalid.
- * Returns a **new** board — the original is not mutated.
+ * Place a domino on the board.  Validates first and throws if the
+ * placement is illegal.  Returns a **new** board — the original is
+ * never mutated.
  *
- * @param {Array[]} board
- * @param {Object}  domino
- * @param {number}  row       - Row for primary half
- * @param {number}  col       - Column for primary half
- * @param {number}  rotation  - Rotation index (0–3)
- * @returns {Array[]} New board with the domino placed.
+ * @param {Board}  board
+ * @param {import("./Domino.js").Domino} domino
+ * @param {number} row      - Row for the primary half.
+ * @param {number} col      - Column for the primary half.
+ * @param {number} rotation - Rotation index (0–3).
+ * @returns {Board} New board with the domino placed.
  * @throws {Error} If the placement is invalid.
+ *
+ * @example
+ * let board = create_board();
+ * board = place_domino(board, domino, 4, 5, 0);
+ * board[4][5].terrain; // domino.primary.terrain
  */
 const place_domino = function (board, domino, row, col, rotation) {
     const result = validate_placement(board, domino, row, col, rotation);

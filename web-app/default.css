@@ -13,7 +13,7 @@
 
 @font-face {
     font-family: 'Righteous';
-    src: url('assets/Righteous.ttf') format('truetype');
+    src: url('assets/alagard.ttf') format('truetype');
     font-weight: normal;
     font-style: normal;
 }
@@ -58,8 +58,8 @@
     --c-invalid: rgba(233, 69, 96, 0.3);
 
     /* ── Text sizes ── */
-    --text-sm: .2rem;
-    --text-md: 8px;
+    --text-sm: 10px;
+    --text-md: 20px;
     --text-lg: 40px;
 
     /* ── Layout tuning knobs ──
@@ -69,8 +69,8 @@
     --board-pad: 4px;
     --header-h: 64px;
     --strip-h: 300px;
-    --gap: 2px;
-    --radius: 4px;
+    --gap: 0px;
+    --radius: 2px;
 
     /* ── Dynamically computed board cell size ──
        Width:  viewport - 2×page-pad - board-gap - 4×board-pad, divided by 18 cells + 16 gaps
@@ -211,37 +211,120 @@ body {
     user-select: none;
 }
 
-/* Terrain colours (shared between board cells, draft tiles, and ghost) */
+/* ── Terrain images ─────────────────────────────────────────────────────────
+   Base rule uses the no-crown art. Crown variants override background-image
+   by matching the compound [data-terrain][data-crowns] selector, which is
+   more specific than [data-terrain] alone so no !important is needed.
+   Add new rows here as you create more crown artwork.
+   ────────────────────────────────────────────────────────────────────────── */
+
+/* Wheat */
 [data-terrain="wheat"] {
-    background: var(--c-wheat);
+    background-image: url('assets/art/wheat.png');
+    background-size: cover;
+    image-rendering: pixelated;
+}
+
+[data-terrain="wheat"][data-crowns="1"] {
+    background-image: url('assets/art/wheat-1c.png');
+    background-size: cover;
+    image-rendering: pixelated;
 }
 
 [data-terrain="forest"] {
-    background: var(--c-forest);
+    background-image: url('assets/art/forest.png');
+    background-size: cover;
+    image-rendering: pixelated;
+}
+
+[data-terrain="forest"][data-crowns="1"] {
+    background-image: url('assets/art/forest-1c.png');
+    background-size: cover;
+    image-rendering: pixelated;
 }
 
 [data-terrain="water"] {
-    background: var(--c-water);
+    background-image: url('assets/art/water.png');
+    background-size: cover;
+    image-rendering: pixelated;
+}
+
+[data-terrain="water"][data-crowns="1"] {
+    background-image: url('assets/art/water-1c.png');
+    background-size: cover;
+    image-rendering: pixelated;
 }
 
 [data-terrain="grassland"] {
-    background: var(--c-grassland);
+    background-image: url('assets/art/grassland.png');
+    background-size: cover;
+    image-rendering: pixelated;
+}
+
+[data-terrain="grassland"][data-crowns="1"] {
+    background-image: url('assets/art/grassland-1c.png');
+    background-size: cover;
+    image-rendering: pixelated;
+}
+
+[data-terrain="grassland"][data-crowns="2"] {
+    background-image: url('assets/art/grassland-2c.png');
+    background-size: cover;
+    image-rendering: pixelated;
 }
 
 [data-terrain="swamp"] {
-    background: var(--c-swamp);
+    background-image: url('assets/art/swamp.png');
+    background-size: cover;
+    image-rendering: pixelated;
+}
+
+[data-terrain="swamp"][data-crowns="1"] {
+    background-image: url('assets/art/swamp-1c.png');
+    background-size: cover;
+    image-rendering: pixelated;
+}
+
+[data-terrain="swamp"][data-crowns="2"] {
+    background-image: url('assets/art/swamp-2c.png');
+    background-size: cover;
+    image-rendering: pixelated;
+}
+
+[data-terrain="swamp"][data-crowns="3"] {
+    background-image: url('assets/art/swamp-3c.png');
+    background-size: cover;
+    image-rendering: pixelated;
 }
 
 [data-terrain="mine"] {
-    background: var(--c-mine);
+    background-image: url('assets/art/mines.png');
+    background-size: cover;
+    image-rendering: pixelated;
+}
+
+[data-terrain="mine"][data-crowns="1"] {
+    background-image: url('assets/art/mines-1c.png');
+    background-size: cover;
+    image-rendering: pixelated;
+}
+
+[data-terrain="mine"][data-crowns="2"] {
+    background-image: url('assets/art/mines-2c.png');
+    background-size: cover;
+    image-rendering: pixelated;
+}
+
+[data-terrain="mine"][data-crowns="3"] {
+    background-image: url('assets/art/mines-3c.png');
+    background-size: cover;
+    image-rendering: pixelated;
 }
 
 .cell[data-terrain="castle"] {
-    background: var(--c-castle);
-    border: 2px solid #6b6b6b;
-    color: #333;
-    text-shadow: none;
-    font-size: var(--text-md);
+    background-image: url('assets/art/castle.png');
+    background-size: cover;
+    image-rendering: pixelated;
 }
 
 /* ── Per-terrain drop shadows (2×2 solid offset) ──────────────────────── */
@@ -273,19 +356,44 @@ body {
     box-shadow: 4px 4px 0 var(--c-castle-shadow);
 }
 
-/* Placement preview */
+/* Placement preview — two cells styled as one joined domino tile */
 .cell.preview-valid {
-    outline: 2px solid var(--c-grassland);
-    outline-offset: -2px;
-    box-shadow: inset 0 0 14px var(--c-valid);
+    border: 2px solid var(--c-grassland);
     background: rgba(126, 200, 80, .15);
 }
 
 .cell.preview-invalid {
-    outline: 2px solid var(--c-invalid);
-    outline-offset: -2px;
-    box-shadow: inset 0 0 14px var(--c-invalid);
+    border: 2px solid rgb(233, 69, 96);
     background: rgba(233, 69, 96, .1);
+}
+
+/* Remove the shared inner border so both cells read as one tile */
+.cell.preview-valid[data-preview-connect="right"],
+.cell.preview-invalid[data-preview-connect="right"] {
+    border-right: none;
+    border-top-right-radius: 0;
+    border-bottom-right-radius: 0;
+}
+
+.cell.preview-valid[data-preview-connect="left"],
+.cell.preview-invalid[data-preview-connect="left"] {
+    border-left: none;
+    border-top-left-radius: 0;
+    border-bottom-left-radius: 0;
+}
+
+.cell.preview-valid[data-preview-connect="down"],
+.cell.preview-invalid[data-preview-connect="down"] {
+    border-bottom: none;
+    border-bottom-left-radius: 0;
+    border-bottom-right-radius: 0;
+}
+
+.cell.preview-valid[data-preview-connect="up"],
+.cell.preview-invalid[data-preview-connect="up"] {
+    border-top: none;
+    border-top-left-radius: 0;
+    border-top-right-radius: 0;
 }
 
 /* ── Terrain merge visuals ─────────────────────────────────────────────── */
@@ -427,9 +535,6 @@ body {
     flex-shrink: 0;
 }
 
-.draft-tile-slot.empty {
-    /* Resolved tile: invisible gap */
-}
 
 .draft-tile-slot.dragging-gap {
     border: 2px dashed var(--c-border);
@@ -439,7 +544,7 @@ body {
 .draft-tile {
     display: flex;
     flex-direction: row;
-    border-radius: 4px;
+    border-radius: var(--radius);
     overflow: hidden;
     border: 2px solid var(--c-border);
     position: relative;
@@ -665,7 +770,7 @@ body {
     z-index: 1000;
     opacity: .85;
     border: 2px solid var(--c-crown);
-    border-radius: 4px;
+    border-radius: 1px;
     overflow: hidden;
     filter: drop-shadow(0 4px 16px rgba(0, 0, 0, .6));
     transition: transform 0.2s cubic-bezier(0.4, 0, 0.2, 1);
@@ -720,23 +825,82 @@ body {
 }
 
 /* ── Game over ─────────────────────────────────────────────────────────── */
-.game-over-banner {
-    text-align: center;
-    padding: 16px;
+.game-over-modal {
+    margin: auto;
+    padding: 32px 48px;
     background: var(--c-surface-alt);
     border: 2px solid var(--c-crown);
     border-radius: var(--radius);
+    color: var(--c-text);
+    font-family: var(--font-main);
+    text-align: center;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.8);
+    outline: none;
 }
 
-.game-over-banner h2 {
+.game-over-modal::backdrop {
+    background: rgba(0, 0, 0, 0.75);
+}
+
+.game-over-modal h2 {
     color: var(--c-crown);
     font-size: var(--text-lg);
-    margin-bottom: 4px;
+    margin-bottom: 12px;
 }
 
-.game-over-banner p {
-    font-size: var(--text-md);
+.game-over-modal p {
+    font-size: 20px;
     color: var(--c-text);
+    margin-bottom: 24px;
+}
+
+.play-again-btn {
+    padding: 10px 24px;
+    border: 1px solid var(--c-border);
+    border-radius: var(--radius);
+    background: var(--c-surface);
+    color: var(--c-text);
+    font-family: var(--font-main);
+    font-size: 16px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: .06em;
+    cursor: pointer;
+    transition: background .15s, border-color .15s;
+}
+
+.play-again-btn:hover {
+    background: var(--c-accent);
+    border-color: var(--c-accent);
+    color: var(--c-text);
+}
+
+.welcome-modal h2 {
+    margin-bottom: 24px;
+}
+
+.welcome-modal .name-inputs {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    margin-bottom: 32px;
+}
+
+.welcome-modal input {
+    padding: 12px 16px;
+    background: var(--c-surface);
+    border: 1px solid var(--c-border);
+    border-radius: var(--radius);
+    color: var(--c-text);
+    font-family: var(--font-main);
+    font-size: 16px;
+    outline: none;
+    text-align: center;
+    transition: border-color .15s;
+}
+
+.welcome-modal input:focus {
+    border-color: var(--c-accent);
 }
 
 /* ── Scrollbar ─────────────────────────────────────────────────────────── */

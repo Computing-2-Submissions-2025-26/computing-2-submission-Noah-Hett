@@ -1,32 +1,49 @@
 /**
  * Scoring.js — Flood-fill scoring engine for Kingdomino.
  *
- * Finds contiguous zones of matching terrain using DFS, then scores
- * each zone as  tileCount × crownCount.  Castle cells are skipped.
+ * Finds contiguous zones of matching terrain using depth-first search,
+ * then scores each zone as `tileCount × crownCount`.  Castle cells are
+ * excluded from zones (they contribute no points).
  *
  * @module Scoring
  */
 
 import R from "./ramda.js";
-import { GRID_SIZE, get_cell, NEIGHBOUR_OFFSETS } from "./Board.js";
+import {GRID_SIZE, get_cell, NEIGHBOUR_OFFSETS} from "./Board.js";
+
+// ─── Type definitions ───────────────────────────────────────────────────────
+
+/**
+ * A contiguous group of same-terrain tiles found by the flood-fill.
+ * @typedef  {Object} Zone
+ * @property {string}          terrain    - The terrain type of this zone.
+ * @property {number}          tileCount  - Number of tiles in the zone.
+ * @property {number}          crownCount - Total crowns across all tiles.
+ * @property {Array.<number[]>} cells     - `[row, col]` of every tile.
+ */
 
 // ─── Zone detection (Depth-First Search / Flood Fill) ───────────────────────
 
 /**
- * Find all contiguous terrain zones on the board.
+ * Find every contiguous terrain zone on the board.
  *
  * Algorithm:
- *   1. Create a 9×9 `visited` matrix, all false.
- *   2. For each unvisited, non-null, non-castle cell, start a DFS.
- *   3. The DFS accumulates tileCount, crownCount, and cell coordinates.
+ *   1. Create a 9×9 `visited` matrix, initialised to `false`.
+ *   2. Scan each cell.  Skip empty, castle, and already-visited cells.
+ *   3. For each unvisited terrain cell, run a DFS that accumulates
+ *      `tileCount`, `crownCount`, and cell coordinates.
  *   4. Adjacent cells with the same terrain are recursively included.
  *
- * @param {Array[]} board - 9×9 game board.
- * @returns {Object[]} Array of zone objects:
- *   { terrain, tileCount, crownCount, cells: [[row, col], ...] }
+ * @param {import("./Board.js").Board} board - 9×9 game board.
+ * @returns {Zone[]} Array of zone objects.
+ *
+ * @example
+ * const zones = find_zones(board);
+ * zones[0].terrain;    // e.g. "wheat"
+ * zones[0].tileCount;  // e.g. 4
+ * zones[0].crownCount; // e.g. 2
  */
 const find_zones = function (board) {
-    // Initialise visited tracker
     const visited = R.times(
         () => R.times(() => false, GRID_SIZE),
         GRID_SIZE
@@ -35,54 +52,52 @@ const find_zones = function (board) {
     const zones = [];
 
     /**
-     * Recursive DFS from a single cell, accumulating into the zone object.
+     * Recursive DFS from a single cell.
      * @param {number} row
      * @param {number} col
-     * @param {string} terrain - The terrain type of the current zone.
-     * @param {Object} zone    - Mutable accumulator { tileCount, crownCount, cells }.
+     * @param {string} terrain - The terrain type being traced.
+     * @param {Object} zone    - Mutable accumulator.
      */
     const dfs = function (row, col, terrain, zone) {
-        // Bounds check
         if (row < 0 || row >= GRID_SIZE || col < 0 || col >= GRID_SIZE) {
             return;
         }
-        // Already visited
         if (visited[row][col]) {
             return;
         }
 
         const cell = get_cell(board, row, col);
 
-        // Empty cell or terrain mismatch
         if (cell === null || cell.terrain !== terrain) {
             return;
         }
 
-        // Mark visited and accumulate
         visited[row][col] = true;
         zone.tileCount += 1;
         zone.crownCount += cell.crowns;
         zone.cells.push([row, col]);
 
-        // Recurse into cardinal neighbours
         R.forEach(
-            ([dr, dc]) => dfs(row + dr, col + dc, terrain, zone),
+            function ([dr, dc]) {
+                dfs(row + dr, col + dc, terrain, zone);
+            },
             NEIGHBOUR_OFFSETS
         );
     };
 
-    // Scan every cell on the board
     R.forEach(
         (r) => R.forEach(
-            (c) => {
+            function (c) {
                 const cell = board[r][c];
 
-                // Skip empty cells, castle, and already-visited cells
-                if (cell === null || cell.terrain === "castle" || visited[r][c]) {
+                if (
+                    cell === null
+                    || cell.terrain === "castle"
+                    || visited[r][c]
+                ) {
                     return;
                 }
 
-                // Start a new zone
                 const zone = {
                     terrain: cell.terrain,
                     tileCount: 0,
@@ -105,11 +120,17 @@ const find_zones = function (board) {
 
 /**
  * Calculate the total score from an array of zones.
- * Each zone scores:  tileCount × crownCount
- * (A zone with 0 crowns scores 0, regardless of size.)
  *
- * @param {Object[]} zones - Array of zone objects from find_zones.
+ * Each zone scores `tileCount × crownCount`.  A zone with zero crowns
+ * contributes nothing.
+ *
+ * @param {Zone[]} zones
  * @returns {number} Total score.
+ *
+ * @example
+ * score_zones([
+ *     { terrain: "wheat", tileCount: 3, crownCount: 2, cells: [] }
+ * ]); // 6
  */
 const score_zones = (zones) => R.reduce(
     (total, zone) => total + zone.tileCount * zone.crownCount,
@@ -118,10 +139,15 @@ const score_zones = (zones) => R.reduce(
 );
 
 /**
- * Convenience: find all zones on a board and return the total score.
- * @param {Array[]} board
- * @returns {number}
+ * Convenience wrapper: find all zones on a board and return the
+ * total score.
+ *
+ * @param {import("./Board.js").Board} board
+ * @returns {number} Total score for the board.
+ *
+ * @example
+ * score_board(create_board()); // 0  (castle-only board)
  */
 const score_board = (board) => score_zones(find_zones(board));
 
-export { find_zones, score_zones, score_board };
+export {find_zones, score_zones, score_board};

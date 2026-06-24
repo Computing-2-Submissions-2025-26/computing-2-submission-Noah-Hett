@@ -1,16 +1,42 @@
 /**
  * Domino.js — Domino data structures and deck factory for Kingdomino.
  *
- * Dominoes are immutable value objects. Rotation is NOT stored on the
- * domino itself — it is tracked by the board when a domino is placed.
+ * A domino is an immutable tile made of two halves, each with a terrain
+ * type and a crown count.  The full 48-tile Kingdomino base-game deck
+ * is built from the compact {@link TILE_DATA} table.
+ *
+ * Rotation is NOT stored on the domino — it is supplied at placement
+ * time and resolved by {@link get_secondary_offset}.
  *
  * @module Domino
  */
 
 import R from "./ramda.js";
 
+// ─── Type definitions ───────────────────────────────────────────────────────
+
+/**
+ * One half of a domino tile.
+ * @typedef  {Object} TileHalf
+ * @property {string} terrain - Terrain type (e.g. "wheat", "forest").
+ * @property {number} crowns  - Number of crowns on this half (0–3).
+ */
+
+/**
+ * An immutable domino tile consisting of two halves.
+ * @typedef  {Object} Domino
+ * @property {number}   id        - Unique tile number (1–48).
+ * @property {TileHalf} primary   - The first (anchor) half.
+ * @property {TileHalf} secondary - The second half, placed via rotation.
+ */
+
 // ─── Terrain types ──────────────────────────────────────────────────────────
-// Display colours are used by the test UI; the scoring engine uses the keys.
+
+/**
+ * Map of terrain names to their display hex colours.
+ * The six playable terrains plus the special "castle" type.
+ * @type {Object.<string, string>}
+ */
 const TERRAIN_TYPES = Object.freeze({
     wheat: "#E8B84B",
     forest: "#2D6A2E",
@@ -22,8 +48,20 @@ const TERRAIN_TYPES = Object.freeze({
 });
 
 // ─── Rotation offsets ───────────────────────────────────────────────────────
-// Index → [rowOffset, colOffset] for the secondary tile relative to primary.
-//   0 = Right   1 = Down   2 = Left   3 = Up
+
+/**
+ * Rotation index → `[rowOffset, colOffset]` for the secondary half
+ * relative to the primary half.
+ *
+ * | Index | Direction | Offset    |
+ * |-------|-----------|-----------|
+ * | 0     | Right     | [0,  1]   |
+ * | 1     | Down      | [1,  0]   |
+ * | 2     | Left      | [0, −1]   |
+ * | 3     | Up        | [−1, 0]   |
+ *
+ * @type {Array.<number[]>}
+ */
 const ROTATION_OFFSETS = Object.freeze([
     Object.freeze([0, 1]),
     Object.freeze([1, 0]),
@@ -32,97 +70,125 @@ const ROTATION_OFFSETS = Object.freeze([
 ]);
 
 // ─── Compact tile data ──────────────────────────────────────────────────────
-// Each entry: [primaryTerrain, primaryCrowns, secondaryTerrain, secondaryCrowns]
-// Ordered by tile number (index + 1 = draft priority / back-of-tile number).
-//
-// The 48 tiles match the official Kingdomino base-game distribution:
-//   Wheat: 26 squares, 5 crowns | Forest: 22 sq, 6 cr | Water: 18 sq, 6 cr
-//   Grassland: 14 sq, 6 cr     | Swamp: 10 sq, 6 cr  | Mine: 6 sq, 7 cr
+
+/**
+ * Compact representation of all 48 Kingdomino base-game tiles.
+ *
+ * Each entry is `[primaryTerrain, primaryCrowns, secondaryTerrain,
+ * secondaryCrowns]`.  Array index + 1 gives the tile number used for
+ * draft-priority sorting.
+ *
+ * @type {Array.<Array>}
+ */
 const TILE_DATA = Object.freeze([
     // ── Same-terrain pairs, no crowns (tiles 1–12) ──
-    ["wheat", 0, "wheat", 0],           // 1
-    ["wheat", 0, "wheat", 0],           // 2
-    ["forest", 0, "forest", 0],         // 3
-    ["forest", 0, "forest", 0],         // 4
-    ["forest", 0, "forest", 0],         // 5
-    ["forest", 0, "forest", 0],         // 6
-    ["water", 0, "water", 0],           // 7
-    ["water", 0, "water", 0],           // 8
-    ["water", 0, "water", 0],           // 9
-    ["grassland", 0, "grassland", 0],   // 10
-    ["grassland", 0, "grassland", 0],   // 11
-    ["swamp", 0, "swamp", 0],           // 12
+    ["wheat", 0, "wheat", 0],
+    ["wheat", 0, "wheat", 0],
+    ["forest", 0, "forest", 0],
+    ["forest", 0, "forest", 0],
+    ["forest", 0, "forest", 0],
+    ["forest", 0, "forest", 0],
+    ["water", 0, "water", 0],
+    ["water", 0, "water", 0],
+    ["water", 0, "water", 0],
+    ["grassland", 0, "grassland", 0],
+    ["grassland", 0, "grassland", 0],
+    ["swamp", 0, "swamp", 0],
 
-    // ── Mixed terrains, no crowns (tiles 13–19) ──
-    ["wheat", 0, "forest", 0],          // 13
-    ["wheat", 0, "water", 0],           // 14
-    ["wheat", 0, "grassland", 0],       // 15
-    ["wheat", 0, "swamp", 0],           // 16
-    ["wheat", 0, "mine", 0],            // 17
-    ["forest", 0, "water", 0],          // 18
-    ["forest", 0, "grassland", 0],      // 19
+    // ── Mixed terrains, no crowns (tiles 13–18) ──
+    ["wheat", 0, "forest", 0],
+    ["wheat", 0, "water", 0],
+    ["wheat", 0, "grassland", 0],
+    ["wheat", 0, "swamp", 0],
+    ["forest", 0, "water", 0],
+    ["forest", 0, "grassland", 0],
 
-    // ── 1 crown, wheat primary (tiles 20–24) ──
-    ["wheat", 1, "forest", 0],          // 20
-    ["wheat", 1, "water", 0],           // 21
-    ["wheat", 1, "grassland", 0],       // 22
-    ["wheat", 1, "swamp", 0],           // 23
-    ["wheat", 1, "mine", 0],            // 24
+    // ── 1 crown, wheat primary (tiles 19–23) ──
+    ["wheat", 1, "forest", 0],
+    ["wheat", 1, "water", 0],
+    ["wheat", 1, "grassland", 0],
+    ["wheat", 1, "swamp", 0],
+    ["wheat", 1, "mine", 0],
 
-    // ── 1 crown, forest primary (tiles 25–30) ──
-    ["forest", 1, "wheat", 0],          // 25
-    ["forest", 1, "wheat", 0],          // 26
-    ["forest", 1, "forest", 0],         // 27
-    ["forest", 1, "forest", 0],         // 28
-    ["forest", 1, "forest", 0],         // 29
-    ["forest", 1, "forest", 0],         // 30
+    // ── 1 crown, forest primary (tiles 24–29) ──
+    ["forest", 1, "wheat", 0],
+    ["forest", 1, "wheat", 0],
+    ["forest", 1, "wheat", 0],
+    ["forest", 1, "wheat", 0],
+    ["forest", 1, "water", 0],
+    ["forest", 1, "grassland", 0],
 
-    // ── 1 crown, water/grass/swamp/mine primary (tiles 31–40) ──
-    ["water", 1, "wheat", 0],           // 31
-    ["water", 1, "wheat", 0],           // 32
-    ["water", 1, "forest", 0],          // 33
-    ["water", 1, "forest", 0],          // 34
-    ["water", 1, "forest", 0],          // 35
-    ["water", 1, "grassland", 0],       // 36
-    ["grassland", 1, "wheat", 0],       // 37
-    ["grassland", 1, "water", 0],       // 38
-    ["swamp", 1, "grassland", 0],       // 39
-    ["mine", 1, "wheat", 0],            // 40
+    // ── 1 crown, water/grass/swamp/mine primary (tiles 30–40) ──
+    ["water", 1, "wheat", 0],
+    ["water", 1, "wheat", 0],
+    ["water", 1, "forest", 0],
+    ["water", 1, "forest", 0],
+    ["water", 1, "forest", 0],
+    ["water", 1, "forest", 0],
 
-    // ── 2 crowns (tiles 41–46) ──
-    ["wheat", 0, "grassland", 2],       // 41
-    ["wheat", 0, "water", 2],           // 42
-    ["wheat", 0, "mine", 2],            // 43
-    ["wheat", 0, "swamp", 2],           // 44
-    ["mine", 2, "grassland", 0],        // 45
-    ["swamp", 2, "grassland", 0],       // 46
+    ["grassland", 1, "wheat", 0],
+    ["grassland", 1, "water", 0],
+    ["swamp", 1, "wheat", 0],
+    ["swamp", 1, "grassland", 0],
+    ["mine", 1, "wheat", 0],
 
-    // ── 3 crowns (tiles 47–48) ──
-    ["mine", 2, "swamp", 0],            // 47
-    ["mine", 3, "wheat", 0]             // 48
+    // ── 2 crowns (tiles 41–47) ──
+    ["wheat", 0, "grassland", 2],
+    ["water", 0, "grassland", 2],
+    ["wheat", 0, "swamp", 2],
+    ["grassland", 0, "swamp", 2],
+    ["mine", 2, "wheat", 0],
+    ["mine", 2, "swamp", 0],
+    ["mine", 2, "swamp", 0],
+
+    // ── 3 crowns (tile 48) ──
+    ["mine", 3, "wheat", 0]
 ]);
 
 // ─── Factory functions ──────────────────────────────────────────────────────
 
 /**
- * Create a single frozen domino object.
+ * Create a single frozen {@link Domino} object.
+ *
  * @param {number} id        - Tile number (1–48).
  * @param {string} p_terrain - Primary terrain type.
- * @param {number} p_crowns  - Crown count on primary half.
+ * @param {number} p_crowns  - Crown count on the primary half.
  * @param {string} s_terrain - Secondary terrain type.
- * @param {number} s_crowns  - Crown count on secondary half.
- * @returns {Object} Frozen domino: { id, primary: {terrain, crowns}, secondary: {terrain, crowns} }
+ * @param {number} s_crowns  - Crown count on the secondary half.
+ * @returns {Domino} A frozen domino value object.
+ *
+ * @example
+ * const tile = create_domino(19, "wheat", 1, "forest", 0);
+ * tile.primary.terrain;  // "wheat"
+ * tile.secondary.crowns; // 0
  */
-const create_domino = (id, p_terrain, p_crowns, s_terrain, s_crowns) =>
-    Object.freeze({
-        id,
-        primary: Object.freeze({ terrain: p_terrain, crowns: p_crowns }),
-        secondary: Object.freeze({ terrain: s_terrain, crowns: s_crowns })
-    });
+const create_domino = (
+    id,
+    p_terrain,
+    p_crowns,
+    s_terrain,
+    s_crowns
+) => Object.freeze({
+    id,
+    primary: Object.freeze({
+        terrain: p_terrain,
+        crowns: p_crowns
+    }),
+    secondary: Object.freeze({
+        terrain: s_terrain,
+        crowns: s_crowns
+    })
+});
 
 /**
- * Build the full 48-domino deck from the compressed tile data.
- * @returns {Object[]} Array of 48 frozen domino objects, ordered by tile number.
+ * Build the full 48-domino deck from {@link TILE_DATA}.
+ *
+ * @returns {Domino[]} Array of 48 frozen domino objects, IDs 1–48.
+ *
+ * @example
+ * const deck = build_deck();
+ * deck.length; // 48
+ * deck[0].id;  // 1
  */
 const build_deck = () => R.addIndex(R.map)(
     (tile, i) => create_domino(i + 1, tile[0], tile[1], tile[2], tile[3]),
@@ -130,12 +196,19 @@ const build_deck = () => R.addIndex(R.map)(
 );
 
 /**
- * Get the [rowOffset, colOffset] of the secondary tile relative to the
- * primary tile for a given rotation index (0–3).
+ * Get the row/column offset of the secondary half relative to the
+ * primary half for a given rotation.
+ *
  * @param {number} rotation_index - 0: Right, 1: Down, 2: Left, 3: Up.
- * @returns {number[]} [rowOffset, colOffset]
+ * @returns {number[]} `[rowOffset, colOffset]`
+ *
+ * @example
+ * get_secondary_offset(0); // [0,  1]  — secondary is to the right
+ * get_secondary_offset(3); // [-1, 0]  — secondary is above
  */
-const get_secondary_offset = (rotation_index) => ROTATION_OFFSETS[rotation_index];
+const get_secondary_offset = (rotation_index) => (
+    ROTATION_OFFSETS[rotation_index]
+);
 
 export {
     TERRAIN_TYPES,

@@ -1,14 +1,17 @@
 /**
  * main.js — UI controller for the 2-player Kingdomino game.
  *
- * Drag-only tile placement, meeple drag onto draft slots,
- * bonded domino visuals, horizontal draft rows.
+ * Handles rendering, drag-and-drop, and user interaction.
+ * All game logic is delegated to the game modules via
+ * {@link module:Kingdomino}.
  *
  * @module main
  */
 
 import { get_secondary_offset } from "./Domino.js";
-import { GRID_SIZE, get_cell, validate_placement, get_valid_bounds } from "./Board.js";
+import {
+    GRID_SIZE, get_cell, validate_placement, get_valid_bounds
+} from "./Board.js";
 import { score_board } from "./Scoring.js";
 import {
     PHASES,
@@ -17,6 +20,7 @@ import {
     place_meeple,
     attempt_placement
 } from "./Game.js";
+import * as Kingdomino from "./Module.js";
 
 // ─── State ──────────────────────────────────────────────────────────────────
 
@@ -42,7 +46,6 @@ let meeple_drag_active = false;
 
 const phase_el = document.getElementById("phase-label");
 const msg_el = document.getElementById("message-bar");
-// rotation-name element removed from layout; rotation shown on tile itself
 const btn_rotate = document.getElementById("btn-rotate");
 const current_line_el = document.getElementById("current-line");
 const next_line_el = document.getElementById("next-line");
@@ -50,16 +53,6 @@ const turn_player_el = document.getElementById("turn-player");
 const turn_action_el = document.getElementById("turn-action");
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
-
-function render_crowns(count) {
-    if (!count) {
-        return "";
-    }
-    return `<span class="crowns">${Array.from({ length: count },
-        () => "<span class=\"crown-dot\"></span>").join("")
-        }</span>`;
-}
-
 function show_message(text, type) {
     msg_el.textContent = text;
     msg_el.className = type || "";
@@ -75,36 +68,46 @@ function render_board(pid) {
     const bounds = get_valid_bounds(player.board);
     el.innerHTML = "";
 
-    // Always keep the internal grid statically 9x9 so tiles never shift relative to it
+    // Always keep the internal grid statically 9x9
     el.style.gridTemplateColumns = `repeat(${GRID_SIZE}, var(--cell))`;
     el.style.gridTemplateRows = `repeat(${GRID_SIZE}, var(--cell))`;
-    el.style.width = `calc(${GRID_SIZE} * var(--cell) + (${GRID_SIZE} - 1) * var(--gap))`;
-    el.style.height = `calc(${GRID_SIZE} * var(--cell) + (${GRID_SIZE} - 1) * var(--gap))`;
+    el.style.width = `calc(${GRID_SIZE} * var(--cell) `
+        + `+ (${GRID_SIZE} - 1) * var(--gap))`;
+    el.style.height = `calc(${GRID_SIZE} * var(--cell) `
+        + `+ (${GRID_SIZE} - 1) * var(--gap))`;
 
-    // Shift the grid inside the frame to align the bounds with the top-left corner
+    // align the bounds with the top-left corner
     el.style.transform = `translate(
         calc(${bounds.minCol} * (var(--cell) + var(--gap)) * -1),
         calc(${bounds.minRow} * (var(--cell) + var(--gap)) * -1)
     )`;
 
-    // Dynamically size the frame and offset it with margins to keep tiles perfectly stationary
+    // size the frame and offset it with margins to keep tiles stationary
     const frame = el.parentElement;
     if (frame) {
         const rowCount = bounds.maxRow - bounds.minRow + 1;
         const colCount = bounds.maxCol - bounds.minCol + 1;
 
-        frame.style.width = `calc(${colCount} * var(--cell) + (${colCount} - 1) * var(--gap) + var(--board-pad) * 2 + 4px)`;
-        frame.style.height = `calc(${rowCount} * var(--cell) + (${rowCount} - 1) * var(--gap) + var(--board-pad) * 2 + 4px)`;
+        frame.style.width = `calc(${colCount} * var(--cell) `
+            + `+ (${colCount} - 1) * var(--gap) `
+            + `+ var(--board-pad) * 2 + 4px)`;
+        frame.style.height = `calc(${rowCount} * var(--cell) `
+            + `+ (${rowCount} - 1) * var(--gap) `
+            + `+ var(--board-pad) * 2 + 4px)`;
 
-        // Margins compensate for cropped rows/cols so the layout footprint is always 9x9
-        frame.style.marginLeft = `calc(${bounds.minCol} * (var(--cell) + var(--gap)))`;
-        frame.style.marginRight = `calc(${GRID_SIZE - 1 - bounds.maxCol} * (var(--cell) + var(--gap)))`;
-        frame.style.marginTop = `calc(${bounds.minRow} * (var(--cell) + var(--gap)))`;
-        frame.style.marginBottom = `calc(${GRID_SIZE - 1 - bounds.maxRow} * (var(--cell) + var(--gap)))`;
+        // Margins compensate for cropped rows/cols
+        frame.style.marginLeft = `calc(${bounds.minCol} `
+            + `* (var(--cell) + var(--gap)))`;
+        frame.style.marginRight = `calc(${GRID_SIZE - 1 - bounds.maxCol} `
+            + `* (var(--cell) + var(--gap)))`;
+        frame.style.marginTop = `calc(${bounds.minRow} `
+            + `* (var(--cell) + var(--gap)))`;
+        frame.style.marginBottom = `calc(${GRID_SIZE - 1 - bounds.maxRow} `
+            + `* (var(--cell) + var(--gap)))`;
     }
 
-    for (let r = 0; r < GRID_SIZE; r++) {
-        for (let c = 0; c < GRID_SIZE; c++) {
+    Array.from({ length: GRID_SIZE }).forEach((ignore1, r) => {
+        Array.from({ length: GRID_SIZE }).forEach((ignore2, c) => {
             const cell = get_cell(player.board, r, c);
             const div = document.createElement("div");
             div.className = "cell";
@@ -114,10 +117,7 @@ function render_board(pid) {
 
             if (cell) {
                 div.dataset.terrain = cell.terrain;
-                div.innerHTML = cell.terrain === "castle"
-                    ? "🏰"
-                    : render_crowns(cell.crowns)
-                    + `<span class="terrain-label">${cell.terrain}</span>`;
+                div.dataset.crowns = cell.crowns;
 
                 // Terrain merging: check 4 neighbours for same terrain
                 const terrain = cell.terrain;
@@ -125,10 +125,18 @@ function render_board(pid) {
                 const down = get_cell(player.board, r + 1, c);
                 const left = get_cell(player.board, r, c - 1);
                 const right = get_cell(player.board, r, c + 1);
-                if (up && up.terrain === terrain) { div.dataset.mergeUp = ""; }
-                if (down && down.terrain === terrain) { div.dataset.mergeDown = ""; }
-                if (left && left.terrain === terrain) { div.dataset.mergeLeft = ""; }
-                if (right && right.terrain === terrain) { div.dataset.mergeRight = ""; }
+                if (up && up.terrain === terrain) {
+                    div.dataset.mergeUp = "";
+                }
+                if (down && down.terrain === terrain) {
+                    div.dataset.mergeDown = "";
+                }
+                if (left && left.terrain === terrain) {
+                    div.dataset.mergeLeft = "";
+                }
+                if (right && right.terrain === terrain) {
+                    div.dataset.mergeRight = "";
+                }
             }
 
             // Drag-drop target: mouseup places tile, mouseenter shows preview
@@ -137,21 +145,22 @@ function render_board(pid) {
                 div.addEventListener("mouseenter", () => {
                     hover_row = r;
                     hover_col = c;
-                    if (drag_active) {
-                        show_preview(pid, r, c);
-                    }
+                    // Preview is driven entirely by mousemove so the
+                    // primary-cell offset calculation is always applied.
                 });
                 div.addEventListener("mouseleave", () => clear_preview(pid));
                 div.addEventListener("mouseup", () => {
-                    if (drag_active) {
-                        confirm_placement(r, c);
+                    // Use the mousemove-tracked hover position (the computed
+                    // primary cell) rather than whichever cell caught mouseup.
+                    if (drag_active && hover_row !== null) {
+                        confirm_placement(hover_row, hover_col);
                     }
                 });
             }
 
             el.appendChild(div);
-        }
-    }
+        });
+    });
 }
 
 function render_boards() {
@@ -171,7 +180,8 @@ function render_boards() {
             p2.classList.add("active");
             p1.classList.add("inactive");
         }
-    } else if (state.phase === PHASES.DRAFT_INITIAL || state.phase === PHASES.RESOLVE_DRAFT) {
+    } else if (state.phase === PHASES.DRAFT_INITIAL
+        || state.phase === PHASES.RESOLVE_DRAFT) {
         p1.classList.add("inactive");
         p2.classList.add("inactive");
     }
@@ -184,19 +194,36 @@ function show_preview(pid, row, col) {
     const slot = state.current_line[state.current_line_index];
     const player = get_player(state, pid);
     const [dr, dc] = get_secondary_offset(rotation);
-    const result = validate_placement(player.board, slot.domino, row, col, rotation);
+    const result = validate_placement(
+        player.board, slot.domino, row, col, rotation
+    );
     const cls = result.valid ? "preview-valid" : "preview-invalid";
+
+    // Direction that primary connects toward secondary, and vice-versa.
+    // Used by CSS to remove the shared inner border so both
+    // cells read as one tile.
+    const connect_pri = ["right", "down", "left", "up"][rotation % 4];
+    const connect_sec = ["left", "up", "right", "down"][rotation % 4];
 
     const pri = document.getElementById(`cell-${pid}-${row}-${col}`);
     const sec = document.getElementById(`cell-${pid}-${row + dr}-${col + dc}`);
-    if (pri) { pri.classList.add(cls); }
-    if (sec) { sec.classList.add(cls); }
+    if (pri) {
+        pri.classList.add(cls);
+        pri.dataset.previewConnect = connect_pri;
+    }
+    if (sec) {
+        sec.classList.add(cls);
+        sec.dataset.previewConnect = connect_sec;
+    }
 }
 
 function clear_preview(pid) {
     document.getElementById(`board-${pid}`)
         .querySelectorAll(".preview-valid,.preview-invalid")
-        .forEach((el) => el.classList.remove("preview-valid", "preview-invalid"));
+        .forEach((el) => {
+            el.classList.remove("preview-valid", "preview-invalid");
+            delete el.dataset.previewConnect;
+        });
 }
 
 // ─── Draft tile rendering ───────────────────────────────────────────────────
@@ -209,12 +236,12 @@ function make_draft_tile(slot, index, line_type) {
     const p = document.createElement("div");
     p.className = "draft-tile-half";
     p.dataset.terrain = slot.domino.primary.terrain;
-    p.innerHTML = render_crowns(slot.domino.primary.crowns);
+    p.dataset.crowns = slot.domino.primary.crowns;
 
     const s = document.createElement("div");
     s.className = "draft-tile-half";
     s.dataset.terrain = slot.domino.secondary.terrain;
-    s.innerHTML = render_crowns(slot.domino.secondary.crowns);
+    s.dataset.crowns = slot.domino.secondary.crowns;
 
     el.appendChild(p);
     el.appendChild(s);
@@ -237,12 +264,17 @@ function render_draft_lines() {
     // Dim inactive tile groups to reduce confusion
     const current_group = document.getElementById("current-group");
     const next_group = document.getElementById("next-group");
-    
+
     const is_draft_phase = state.phase === PHASES.DRAFT_INITIAL
         || state.phase === PHASES.RESOLVE_DRAFT;
-        
+
     if (current_group) current_group.classList.toggle("dimmed", is_draft_phase);
-    if (next_group) next_group.classList.toggle("dimmed", !is_draft_phase && state.phase !== PHASES.GAME_OVER);
+    if (next_group) {
+        next_group.classList.toggle(
+            "dimmed",
+            !is_draft_phase && state.phase !== PHASES.GAME_OVER
+        );
+    }
 
     // ── Current line: always 4 fixed slots ──
     current_line_el.innerHTML = "";
@@ -327,12 +359,12 @@ function start_tile_drag(e, domino) {
     const p = document.createElement("div");
     p.className = "ghost-half";
     p.dataset.terrain = domino.primary.terrain;
-    p.innerHTML = render_crowns(domino.primary.crowns);
+    p.dataset.crowns = domino.primary.crowns;
 
     const s = document.createElement("div");
     s.className = "ghost-half";
     s.dataset.terrain = domino.secondary.terrain;
-    s.innerHTML = render_crowns(domino.secondary.crowns);
+    s.dataset.crowns = domino.secondary.crowns;
 
     ghost_el.appendChild(p);
     ghost_el.appendChild(s);
@@ -469,20 +501,27 @@ function rotate_tile() {
     const active_tile_el = document.querySelector(".draft-tile.highlight");
     if (active_tile_el) {
         active_tile_el.dataset.rotation = rotation;
-        active_tile_el.style.setProperty("--rotation-deg", `${visual_rotation_deg}deg`);
+        active_tile_el.style.setProperty(
+            "--rotation-deg",
+            `${visual_rotation_deg}deg`
+        );
         active_tile_el.style.transform = `rotate(${visual_rotation_deg}deg)`;
     }
 
     // Update ghost and re-anchor at the last known cursor position
     if (ghost_el) {
         ghost_el.dataset.rotation = rotation;
-        ghost_el.style.setProperty("--rotation-deg", `${visual_rotation_deg}deg`);
+        ghost_el.style.setProperty(
+            "--rotation-deg",
+            `${visual_rotation_deg}deg`
+        );
         ghost_el.style.transform = `rotate(${visual_rotation_deg}deg)`;
         move_ghost(last_x, last_y);
     }
 
     // Refresh board preview with new rotation
-    if (drag_active && state.phase === PHASES.RESOLVE_PLACE && hover_row !== null) {
+    if (drag_active && state.phase === PHASES.RESOLVE_PLACE
+        && hover_row !== null) {
         show_preview(state.active_player_id, hover_row, hover_col);
     }
 }
@@ -515,7 +554,10 @@ function render_turn() {
     const player = get_player(state, pid);
     const ind = document.getElementById("turn-indicator");
 
-    if (state.phase === PHASES.GAME_OVER) { ind.style.display = "none"; return; }
+    if (state.phase === PHASES.GAME_OVER) {
+        ind.style.display = "none";
+        return;
+    }
     ind.style.display = "";
     turn_player_el.textContent = player.name;
     turn_player_el.style.color = player.color;
@@ -530,18 +572,35 @@ function render_turn() {
 
 function render_game_over() {
     if (state.phase !== PHASES.GAME_OVER) { return; }
-    const strip = document.getElementById("draft-strip");
-    if (strip.querySelector(".game-over-banner")) { return; }
+    if (document.querySelector(".game-over-modal")) { return; }
 
     const p1 = get_player(state, "P1");
     const p2 = get_player(state, "P2");
     const winner = p1.score > p2.score ? "Player 1 wins!"
         : p2.score > p1.score ? "Player 2 wins!" : "It's a tie!";
 
-    const b = document.createElement("div");
-    b.className = "game-over-banner";
-    b.innerHTML = `<h2>${winner}</h2><p>P1: ${p1.score} — P2: ${p2.score}</p>`;
-    strip.appendChild(b);
+    const modal = document.createElement("dialog");
+    modal.className = "game-over-modal";
+
+    modal.innerHTML = `
+        <h2>${winner}</h2>
+        <p>P1: ${p1.score} &nbsp;—&nbsp; P2: ${p2.score}</p>
+        <button class="play-again-btn">Play Again</button>
+    `;
+
+    document.body.appendChild(modal);
+    modal.showModal();
+
+    modal.querySelector(".play-again-btn").addEventListener("click", () => {
+        modal.close();
+        modal.remove();
+
+        state = create_game(2);
+        rotation = 0;
+        visual_rotation_deg = 0;
+
+        render_all();
+    });
 }
 
 function render_all() {
@@ -562,7 +621,28 @@ document.addEventListener("mousemove", (e) => {
         move_ghost(e.clientX, e.clientY);
         if (state.phase === PHASES.RESOLVE_PLACE) {
             const pid = state.active_player_id;
-            const under = document.elementFromPoint(e.clientX, e.clientY);
+
+            // The ghost is centered on the cursor (midpoint of both cells).
+            // To consistently identify the PRIMARY cell we look up a point
+            // that is offset half-a-cell away from the cursor in the direction
+            // of the primary (i.e., opposite to where the secondary extends).
+            // rot 0: secondary is right → primary is left  → look left
+            // rot 1: secondary is down  → primary is up    → look up
+            // rot 2: secondary is left  → primary is right → look right
+            // rot 3: secondary is up    → primary is down  → look down
+            let look_x = e.clientX;
+            let look_y = e.clientY;
+            if (ghost_el) {
+                // min(width, height) of the rotated ghost ≈ one cell in px
+                const rect = ghost_el.getBoundingClientRect();
+                const half_cell = Math.min(rect.width, rect.height) / 2;
+                const dx = [-half_cell, 0, half_cell, 0][rotation % 4];
+                const dy = [0, -half_cell, 0, half_cell][rotation % 4];
+                look_x += dx;
+                look_y += dy;
+            }
+
+            const under = document.elementFromPoint(look_x, look_y);
             if (under && under.classList.contains("cell")
                 && under.id.startsWith(`cell-${pid}`)) {
                 const r = parseInt(under.dataset.row, 10);
@@ -602,6 +682,85 @@ document.addEventListener("wheel", (e) => {
 
 btn_rotate.addEventListener("click", rotate_tile);
 
+// ─── Console playability ────────────────────────────────────────────────────
+// Expose the full game API on window so the game can be tested from the
+// browser console, as the assessment brief requires.
+
+window.Kingdomino = Kingdomino;
+
+/** Get the live game state (read-only snapshot). */
+window.getState = () => JSON.parse(JSON.stringify(state));
+
+/** Replace the live game state and re-render. */
+window.setState = (new_state) => {
+    state = new_state;
+    render_all();
+};
+
 // ─── Boot ───────────────────────────────────────────────────────────────────
 
 render_all();
+
+function show_welcome_modal() {
+    const modal = document.createElement("dialog");
+    modal.className = "game-over-modal welcome-modal";
+
+    modal.innerHTML = `
+        <h2>Welcome to Kingdomino</h2>
+        <div class="name-inputs">
+            <input type="text" id="p1-name"
+                placeholder="Player 1 Name" value="" />
+            <input type="text" id="p2-name"
+                placeholder="Player 2 Name" value="" />
+        </div>
+        <button class="play-again-btn" id="start-game-btn">Start Game</button>
+    `;
+
+    document.body.appendChild(modal);
+    modal.showModal();
+
+    modal.querySelector("#start-game-btn").addEventListener("click", () => {
+        const p1_val = modal.querySelector("#p1-name").value.trim();
+        const p2_val = modal.querySelector("#p2-name").value.trim();
+        const p1_name = p1_val || "Player 1";
+        const p2_name = p2_val || "Player 2";
+
+        state = Object.assign({}, state, {
+            players: state.players.map((p) => {
+                if (p.id === "P1") {
+                    return Object.assign({}, p, { name: p1_name });
+                }
+                if (p.id === "P2") {
+                    return Object.assign({}, p, { name: p2_name });
+                }
+                return p;
+            })
+        });
+
+        modal.close();
+        modal.remove();
+        render_all();
+    });
+}
+
+show_welcome_modal();
+render_all();
+
+/* eslint-disable no-console */
+console.log(
+    "%c Kingdomino - Console API ",
+    "color:#FFD700; font-size:16px; font-weight:bold;"
+);
+console.log(
+    "The full game API is available as %cwindow.Kingdomino%c.\n"
+    + "  Kingdomino.create_game(2)    — new game state\n"
+    + "  Kingdomino.place_meeple(s,i) — draft a tile\n"
+    + "  Kingdomino.attempt_placement(s, row, col, rot)\n"
+    + "  Kingdomino.score_board(board)\n\n"
+    + "Inspect live state:  %cgetState()%c\n"
+    + "Replace live state:  %csetState(newState)%c",
+    "color:#3B82C8", "",
+    "color:#3B82C8", "",
+    "color:#3B82C8", ""
+);
+/* eslint-enable no-console */
