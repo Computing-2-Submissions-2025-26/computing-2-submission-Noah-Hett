@@ -350,6 +350,16 @@ function make_draft_tile(slot, index, line_type) {
 let dragging_index = -1;
 let last_rendered_round = 0;
 let is_booting = true;
+let last_message = "";
+
+// ─── Discard notification ────────────────────────────────────────────────────
+
+/**
+ * Index in current_line of the tile currently playing its discard animation.
+ * Set before render, cleared after animation completes.
+ * -1 means no discard in progress.
+ */
+let pending_discard_slot = -1;
 
 function render_draft_lines(opts = {}) {
     const animate = opts.animate_new_round || false;
@@ -400,6 +410,8 @@ function render_draft_lines(opts = {}) {
         }
 
         // Resolved/placed tiles → empty placeholder preserving position.
+        // Exception: if this slot is currently playing a discard animation,
+        // keep the tile rendered so the animation is visible.
         const is_resolved = (
             i < state.current_line_index
             || (
@@ -407,7 +419,7 @@ function render_draft_lines(opts = {}) {
                 && state.phase === PHASES.RESOLVE_DRAFT
             )
         );
-        if (is_resolved) {
+        if (is_resolved && i !== pending_discard_slot) {
             slot_container.classList.add("empty");
             current_line_el.appendChild(slot_container);
             return;
@@ -837,9 +849,11 @@ function render_game_over() {
     const winner = (
         p1.score > p2.score
         ? `${p1.name} wins!`
-        : p2.score > p1.score
-        ? `${p2.name} wins!`
-        : "It's a tie!"
+        : (
+            p2.score > p1.score
+            ? `${p2.name} wins!`
+            : "It's a tie!"
+        )
     );
 
     const modal = document.createElement("dialog");
@@ -863,15 +877,117 @@ function render_game_over() {
         rotation = 0;
         visual_rotation_deg = 0;
         last_rendered_round = 0;
+        last_message = "";
 
         render_all();
     });
 }
 
-render_all = function () {
+render_all = function (opts) {
+    const skip_discard_check = (opts && opts.skip_discard_check) || false;
     const is_new_round = state.round > last_rendered_round;
     const animate = is_new_round && !is_booting;
     last_rendered_round = state.round;
+
+    // Detect an auto-discard: message changed to a "No valid placement" notice
+    const is_discard = (
+        !skip_discard_check &&
+        state.message !== last_message &&
+        state.message.indexOf("No valid placement") !== -1
+    );
+    last_message = state.message;
+
+    if (is_discard) {
+        // The discarded slot index: when phase is RESOLVE_DRAFT the index
+        // is unchanged (tile wasn't placed, just marked unplayable).
+        // When next_line was empty and the slot was auto-advanced, skip the
+        // animation since we can't reliably identify the slot.
+        const discard_idx = (
+            state.phase === PHASES.RESOLVE_DRAFT
+            ? state.current_line_index
+            : -1
+        );
+        if (discard_idx === -1) {
+            // Fallback: just render immediately without animation
+            render_boards();
+            render_draft_lines({animate_new_round: animate});
+            render_meeples();
+            render_scores();
+            render_phase();
+            render_turn();
+            show_message(state.message, "warning");
+            render_game_over();
+            return;
+        }
+
+        // 1. Set the pending slot so render_draft_lines keeps the tile visible.
+        pending_discard_slot = discard_idx;
+
+        // 2. Render everything — the discarded tile is now in the DOM.
+        render_boards();
+        render_draft_lines({animate_new_round: animate});
+        render_meeples();
+        render_scores();
+        render_phase();
+        render_turn();
+        show_message(state.message, "warning");
+        render_game_over();
+
+        // 3. Find the rendered tile and animate it.
+        const slots = current_line_el.querySelectorAll(".draft-tile-slot");
+        const discard_el = (
+            slots[discard_idx]
+            ? slots[discard_idx].querySelector(".draft-tile")
+            : null
+        );
+
+        if (!discard_el) {
+            pending_discard_slot = -1;
+            return;
+        }
+
+        // Phase 1: shake + red ✕ overlay
+        discard_el.classList.add("discarding");
+
+        const do_phase2 = function (e) {
+            // Ignore events bubbling from child/pseudo-element animations
+            if (e && e.animationName !== "discard-shake") {
+                return;
+            }
+            discard_el.removeEventListener("animationend", do_phase2);
+            discard_el.classList.remove("discarding");
+            discard_el.classList.add("discarding-exit");
+
+            let cleanup_done = false;
+            const do_cleanup = function () {
+                if (cleanup_done) {
+                    return;
+                }
+                cleanup_done = true;
+                discard_el.removeEventListener("animationend", do_cleanup);
+                pending_discard_slot = -1;
+                render_draft_lines();
+            };
+            discard_el.addEventListener("animationend", function (ev) {
+                if (ev.animationName === "discard-shrink") {
+                    do_cleanup();
+                }
+            });
+            setTimeout(do_cleanup, 400); // safety fallback
+        };
+
+        discard_el.addEventListener("animationend", do_phase2);
+        // Safety: if animationend doesn't fire within 600ms, force transition
+        setTimeout(function () {
+            if (discard_el.classList.contains("discarding")) {
+                discard_el.removeEventListener("animationend", do_phase2);
+                do_phase2(null);
+            }
+        }, 600);
+
+        return;
+    }
+
 
     render_boards();
     render_draft_lines({animate_new_round: animate});
@@ -1094,6 +1210,7 @@ function show_welcome_modal() {
         modal.remove();
         is_booting = false;
         last_rendered_round = 0;
+        last_message = "";
         render_all();
     });
 }
