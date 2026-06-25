@@ -145,6 +145,7 @@ const get_player = (state, pid) => state.players.find(
 
 /**
  * Return a new state with one player's board (and score) replaced.
+ * @private
  *
  * @param {GameState} state
  * @param {string}    pid
@@ -165,10 +166,14 @@ const update_player = function (state, pid, new_board) {
 };
 
 /**
- * Deal 4 tiles from the deck, sorted by tile id.
+ * Extract the next batch of tiles and sort them by ascending rank.
+ * @private
  *
  * @param {import("./Domino.js").Domino[]} deck
- * @returns {{ line: DraftSlot[], deck: import("./Domino.js").Domino[] }}
+ * @returns {{
+ *   dealt: import("./Domino.js").Domino[],
+ *   remaining: import("./Domino.js").Domino[]
+ * }}
  */
 const deal_from_deck = function (deck) {
     if (deck.length < TILES_PER_DEAL) {

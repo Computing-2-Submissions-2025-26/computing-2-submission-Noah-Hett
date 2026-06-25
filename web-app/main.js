@@ -43,7 +43,8 @@ let meeple_drag_active = false;
 // Keyboard placement state
 let keyboard_placement_active = false;
 
-// Forward declarations to resolve JSLint out-of-scope cyclical dependencies
+// We declare these functions up here so JSLint doesn't complain about them
+// being used before they are defined (this happens naturally with events).
 let clear_preview;
 let confirm_placement;
 let handle_draft_click;
@@ -78,6 +79,11 @@ function show_message(text, type) {
 
 // ─── Board rendering ────────────────────────────────────────────────────────
 
+/**
+ * Updates the visual board for a specific player, ensuring the 5x5 boundary
+ * is correctly cropped and centred.
+ * @param {string} pid The player's ID ("P1" or "P2")
+ */
 function render_board(pid) {
     const el = document.getElementById(`board-${pid}`);
     const player = get_player(state, pid);
@@ -125,6 +131,8 @@ function render_board(pid) {
             * (var(--cell) + var(--gap)))`;
     }
 
+    // We pass 'ignore_r' and 'ignore_c' to keep JSLint happy, as it doesn't
+    // like unused parameters, but we just need the index to iterate.
     Array.from({length: GRID_SIZE}).forEach(function (ignore_r, r) {
         if (ignore_r !== undefined) {
             return;
@@ -192,6 +200,7 @@ function render_board(pid) {
     });
 }
 
+/** Updates both players' boards on the screen. */
 function render_boards() {
     render_board("P1");
     render_board("P2");
@@ -363,6 +372,11 @@ let last_message = "";
  */
 let pending_discard_slot = -1;
 
+/**
+ * Draws the current and next lines of dominoes, handling all the animations
+ * for sliding and flipping tiles over when a new round starts.
+ * @param {object} opts Options object (e.g. { animate_new_round: true })
+ */
 function render_draft_lines(opts = {}) {
     const animate = opts.animate_new_round || false;
 
@@ -371,11 +385,6 @@ function render_draft_lines(opts = {}) {
     const next_group = document.getElementById("next-group");
 
     const is_draft_phase = (
-        state.phase === PHASES.DRAFT_INITIAL
-        || state.phase === PHASES.RESOLVE_DRAFT
-    );
-
-    const is_draft = (
         state.phase === PHASES.DRAFT_INITIAL
         || state.phase === PHASES.RESOLVE_DRAFT
     );
@@ -511,7 +520,7 @@ function render_draft_lines(opts = {}) {
 
         if (slot.meeple !== null) {
             el.classList.add("claimed");
-        } else if (is_draft) {
+        } else if (is_draft_phase) {
             el.classList.add("available");
             el.setAttribute("tabindex", "0");
             el.addEventListener("click", function () {
@@ -797,6 +806,7 @@ function rotate_tile() {
 
 // ─── Rendering ──────────────────────────────────────────────────────────────
 
+/** Updates the scores displayed in the top corners of the screen. */
 function render_scores() {
     state.players.forEach(function (p) {
         const el = document.getElementById(`score-${p.id}`);
@@ -806,6 +816,7 @@ function render_scores() {
     });
 }
 
+/** Updates the main phase label (e.g. "Drafting Phase", "Placing Phase"). */
 function render_phase() {
     const names = {};
     names[PHASES.DRAFT_INITIAL] = "Initial Draft";
@@ -818,6 +829,7 @@ function render_phase() {
     }
 }
 
+/** Refreshes the turn indicator bar at the bottom with whose go it is. */
 function render_turn() {
     const pid = state.active_player_id;
     const player = get_player(state, pid);
@@ -838,6 +850,7 @@ function render_turn() {
     turn_action_el.textContent = acts[state.phase] || "";
 }
 
+/** Triggers the big game over overlay with the final scores and winner. */
 function render_game_over() {
     if (state.phase !== PHASES.GAME_OVER) {
         return;
@@ -966,7 +979,13 @@ function render_game_over() {
     });
 }
 
-render_all = function (opts) {
+
+/**
+ * The main render cycle. This reads the current state and delegates to all
+ * the individual rendering functions to get everything drawn correctly.
+ * @param {object} opts Rendering options to pass along
+ */
+render_all = function (opts = {}) {
     const skip_discard_check = (opts && opts.skip_discard_check) || false;
     const is_new_round = state.round > last_rendered_round;
     const animate = is_new_round && !is_booting;
@@ -1269,7 +1288,7 @@ play_draw_order_animation = function () {
 
     overlay.innerHTML = `
         <div class="draw-order-container">
-            <h2>Initial Draw Order</h2>
+            <h2>Initial Draft Order</h2>
             <div class="draw-order-flags">
                 ${flags_html}
             </div>
@@ -1317,11 +1336,11 @@ show_welcome_modal = function () {
                         <strong>
                             Claim your tiles
                         </strong>
-                        to add to your board(picking tiles decides turn order!)
+                        to add to your board (picking tiles decides turn order!)
                     </p>
                     <p>
                         <strong>
-                            Build out your kingdom
+                            Drag tiles to build out your kingdom
                         </strong>
                         from your castle, to a 5x5 grid max.
                     </p>

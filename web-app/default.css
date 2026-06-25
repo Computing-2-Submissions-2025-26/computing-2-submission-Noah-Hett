@@ -58,6 +58,7 @@
     --text-sm: 15px;
     --text-md: 20px;
     --text-lg: 40px;
+    --text-score: 100px;
 
     /* ── Layout tuning knobs ──
        Change any of these and --cell recalculates automatically. */
@@ -68,10 +69,32 @@
     --strip-h: 300px;
     --gap: 0px;
     --radius: 2px;
+    --border-w: 2px;
+    --panel-gap: 6px;
+    --scroll-h: 40px;
+    --scroll-w: 40px;
+    --scroll-part-w: 60px;
+    --shadow-offset: 4px 4px 0;
+    --meeple-size: 28px;
+    --meeple-token-size: 32px;
+    --scores-gap: 80px;
+
+    /* ── Component colours ── */
+    --c-tile-back: #6B4E31;
+    --c-tile-back-border: #4A331A;
+    --c-scroll-text: #fffdec;
+    --c-slot-highlight: #a3a3a3;
+    --c-discard: #ff4444;
+    --c-warning: #cc6666;
+    --c-warning-bright: #ff9090;
+
+    /* ── Transition speeds ── */
+    --speed-fast: 0.2s;
+    --speed-med: 0.3s;
 
     /* ── Dynamically computed board cell size ──
-       Width:  viewport - 2×page-pad - board-gap - 4×board-pad, divided by 18 cells + 16 gaps
-       Height: viewport - header - strip - 2×page-pad - 2×board-pad, divided by 9 cells + 8 gaps */
+       Width:  viewport minus padding/gaps, divided across 18 cells.
+       Height: viewport minus header/strip/padding, divided across 9 cells. */
     --cell: clamp(28px,
             min(calc((100vw - var(--page-pad) * 2 - var(--board-gap) - var(--board-pad) * 4 - var(--gap) * 16) / 18),
                 calc((100dvh - var(--header-h) - var(--strip-h) - var(--page-pad) - var(--board-pad) * 2 - var(--gap) * 8) / 9)),
@@ -129,9 +152,8 @@ body {
 .player-panel {
     display: flex;
     flex-direction: column;
-    gap: 6px;
-    /* Fast, immediate fade-in when becoming active */
-    transition: opacity .25s ease;
+    gap: var(--panel-gap);
+    transition: opacity var(--speed-med) ease;
 }
 
 .player-panel.inactive {
@@ -142,24 +164,23 @@ body {
     display: flex;
     align-items: baseline;
     justify-content: space-between;
-    padding: 0 4px;
+    padding: 0 var(--board-pad);
 }
 
-/* Scroll headers for Player 1 and Player 2 */
+/* Scroll-style name banners for each player */
 .panel-header.scroll-header {
     display: flex;
     align-self: flex-start;
-    /* Wrap banner to the text length */
     align-items: stretch;
-    height: 40px;
+    height: var(--scroll-h);
     padding: 0;
-    margin-bottom: 4px;
+    margin-bottom: var(--board-pad);
     image-rendering: pixelated;
     filter: drop-shadow(3px 3px 0 #3c3c3c);
 }
 
 .panel-header.scroll-header .scroll-edge {
-    width: 40px;
+    width: var(--scroll-w);
     flex-shrink: 0;
 }
 
@@ -168,8 +189,7 @@ body {
     display: flex;
     align-items: center;
     justify-content: center;
-    padding: 0 4px;
-    /* small side padding to balance the scroll rolls */
+    padding: 0 var(--board-pad);
 }
 
 .player-name {
@@ -179,7 +199,7 @@ body {
 }
 
 .panel-header.scroll-header .player-name {
-    color: #fffdec;
+    color: var(--c-scroll-text);
     padding-bottom: 0;
     line-height: 1;
 }
@@ -218,32 +238,28 @@ body {
     text-shadow: 1px 1px 0px #0c2040;
 }
 
-#player-P1 .player-name {
+/* Both players share the same base name colour */
+.player-name {
     color: var(--c-text);
 }
 
-#player-P2 .player-name {
-    color: var(--c-text);
-}
-
-.player-score {
-    font-size: var(--text-md);
-    font-weight: 700;
-    color: var(--c-crown);
-}
-
-/* Board frame — dashed border, no visible grid */
+/* Board frame: dashed border wrapping the grid */
 .board-frame {
-    border: 2px dashed var(--c-border);
+    border: var(--border-w) dashed var(--c-border);
     border-radius: var(--radius);
     padding: var(--board-pad);
-    transition: border-color .25s ease .75s, width .35s ease .3s, height .35s ease .3s, margin .35s ease .3s, outline .15s;
+    transition:
+        border-color var(--speed-med) ease .75s,
+        width .35s ease .3s,
+        height .35s ease .3s,
+        margin .35s ease .3s,
+        outline var(--speed-fast);
     overflow: hidden;
-    outline: 2px solid transparent;
+    outline: var(--border-w) solid transparent;
 }
 
 .board-frame:focus-visible {
-    outline: 2px solid var(--c-crown);
+    outline: var(--border-w) solid var(--c-crown);
     box-shadow: 0 0 16px rgba(255, 215, 0, 0.4);
 }
 
@@ -279,121 +295,93 @@ body {
     user-select: none;
 }
 
-/* ── Terrain images ─────────────────────────────────────────────────────────
-   Base rule uses the no-crown art. Crown variants override background-image
-   by matching the compound [data-terrain][data-crowns] selector, which is
-   more specific than [data-terrain] alone so no !important is needed.
-   Add new rows here as you create more crown artwork.
-   ────────────────────────────────────────────────────────────────────────── */
+/* ── Terrain images ────────────────────────────────────────────────────────
+   All terrain cells share pixel-art rendering. Each terrain type sets its
+   own background-image. Crown variants use compound selectors
+   [data-terrain][data-crowns] which are naturally more specific.
+   ──────────────────────────────────────────────────────────────────────── */
+
+/* Shared rendering for every terrain tile */
+[data-terrain] {
+    background-size: cover;
+    image-rendering: pixelated;
+}
 
 /* Wheat */
 [data-terrain="wheat"] {
     background-image: url('assets/art/wheat.png');
-    background-size: cover;
-    image-rendering: pixelated;
 }
 
 [data-terrain="wheat"][data-crowns="1"] {
     background-image: url('assets/art/wheat-1c.png');
-    background-size: cover;
-    image-rendering: pixelated;
 }
 
+/* Forest */
 [data-terrain="forest"] {
     background-image: url('assets/art/forest.png');
-    background-size: cover;
-    image-rendering: pixelated;
 }
 
 [data-terrain="forest"][data-crowns="1"] {
     background-image: url('assets/art/forest-1c.png');
-    background-size: cover;
-    image-rendering: pixelated;
 }
 
+/* Water */
 [data-terrain="water"] {
     background-image: url('assets/art/water.png');
-    background-size: cover;
-    image-rendering: pixelated;
 }
 
 [data-terrain="water"][data-crowns="1"] {
     background-image: url('assets/art/water-1c.png');
-    background-size: cover;
-    image-rendering: pixelated;
 }
 
+/* Grassland */
 [data-terrain="grassland"] {
     background-image: url('assets/art/grassland.png');
-    background-size: cover;
-    image-rendering: pixelated;
 }
 
 [data-terrain="grassland"][data-crowns="1"] {
     background-image: url('assets/art/grassland-1c.png');
-    background-size: cover;
-    image-rendering: pixelated;
 }
 
 [data-terrain="grassland"][data-crowns="2"] {
     background-image: url('assets/art/grassland-2c.png');
-    background-size: cover;
-    image-rendering: pixelated;
 }
 
+/* Swamp */
 [data-terrain="swamp"] {
     background-image: url('assets/art/swamp.png');
-    background-size: cover;
-    image-rendering: pixelated;
 }
 
 [data-terrain="swamp"][data-crowns="1"] {
     background-image: url('assets/art/swamp-1c.png');
-    background-size: cover;
-    image-rendering: pixelated;
 }
 
 [data-terrain="swamp"][data-crowns="2"] {
     background-image: url('assets/art/swamp-2c.png');
-    background-size: cover;
-    image-rendering: pixelated;
 }
 
 [data-terrain="swamp"][data-crowns="3"] {
     background-image: url('assets/art/swamp-3c.png');
-    background-size: cover;
-    image-rendering: pixelated;
 }
 
+/* Mine */
 [data-terrain="mine"] {
     background-image: url('assets/art/mines.png');
-    background-size: cover;
-    image-rendering: pixelated;
 }
 
 [data-terrain="mine"][data-crowns="1"] {
     background-image: url('assets/art/mines-1c.png');
-    background-size: cover;
-    image-rendering: pixelated;
 }
 
 [data-terrain="mine"][data-crowns="2"] {
     background-image: url('assets/art/mines-2c.png');
-    background-size: cover;
-    image-rendering: pixelated;
 }
 
 [data-terrain="mine"][data-crowns="3"] {
     background-image: url('assets/art/mines-3c.png');
-    background-size: cover;
-    image-rendering: pixelated;
 }
 
-.cell[data-terrain="castle"] {
-    background-size: cover;
-    image-rendering: pixelated;
-}
-
+/* Castle (player-specific art) */
 #board-P1 .cell[data-terrain="castle"] {
     background-image: url('assets/art/castle-red.png');
 }
@@ -402,44 +390,44 @@ body {
     background-image: url('assets/art/castle-blue.png');
 }
 
-/* ── Per-terrain drop shadows (2×2 solid offset) ──────────────────────── */
+/* ── Per-terrain drop shadows ──────────────────────────────────────────── */
 .cell[data-terrain="wheat"] {
-    box-shadow: 4px 4px 0 var(--c-wheat-shadow);
+    box-shadow: var(--shadow-offset) var(--c-wheat-shadow);
 }
 
 .cell[data-terrain="forest"] {
-    box-shadow: 4px 4px 0 var(--c-forest-shadow);
+    box-shadow: var(--shadow-offset) var(--c-forest-shadow);
 }
 
 .cell[data-terrain="water"] {
-    box-shadow: 4px 4px 0 var(--c-water-shadow);
+    box-shadow: var(--shadow-offset) var(--c-water-shadow);
 }
 
 .cell[data-terrain="grassland"] {
-    box-shadow: 4px 4px 0 var(--c-grassland-shadow);
+    box-shadow: var(--shadow-offset) var(--c-grassland-shadow);
 }
 
 .cell[data-terrain="swamp"] {
-    box-shadow: 4px 4px 0 var(--c-swamp-shadow);
+    box-shadow: var(--shadow-offset) var(--c-swamp-shadow);
 }
 
 .cell[data-terrain="mine"] {
-    box-shadow: 4px 4px 0 var(--c-mine-shadow);
+    box-shadow: var(--shadow-offset) var(--c-mine-shadow);
 }
 
 .cell[data-terrain="castle"] {
-    box-shadow: 4px 4px 0 var(--c-castle-shadow);
+    box-shadow: var(--shadow-offset) var(--c-castle-shadow);
 }
 
-/* Placement preview — two cells styled as one joined domino tile */
+/* Placement preview: two cells styled as a joined domino tile */
 .cell.preview-valid {
-    border: 2px solid var(--c-grassland);
+    border: var(--border-w) solid var(--c-grassland);
     background: rgba(126, 200, 80, .15);
     background-image: none !important;
 }
 
 .cell.preview-invalid {
-    border: 2px solid rgb(233, 69, 96);
+    border: var(--border-w) solid rgb(233, 69, 96);
     background: rgba(233, 69, 96, .1);
     background-image: none !important;
 }
@@ -535,12 +523,10 @@ body {
     width: 100%;
     margin-top: 12px;
     font-size: var(--text-sm);
-
 }
 
 #message-bar {
     margin-left: auto;
-
 }
 
 #turn-indicator {
@@ -572,7 +558,7 @@ body {
     font-size: inherit;
     font-weight: 600;
     cursor: pointer;
-    transition: background .15s, border-color .15s;
+    transition: background var(--speed-fast), border-color var(--speed-fast);
 }
 
 #btn-rotate:hover {
@@ -625,20 +611,19 @@ body {
 }
 
 .draft-tile-slot.highlight-slot {
-    border: 4px solid #a3a3a3;
-    /* Lighter stone-ish grey */
+    border: 4px solid var(--c-slot-highlight);
 }
 
-
 .draft-tile-slot.dragging-gap {
-    border: 2px dashed var(--c-border);
+    border: var(--border-w) dashed var(--c-border);
 }
 
 /* Draft tiles — 3D flipping container */
 .draft-tile {
     position: relative;
     cursor: grab;
-    transition: transform 0.25s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.15s;
+    transition: transform var(--speed-med) cubic-bezier(0.4, 0, 0.2, 1),
+        opacity var(--speed-fast);
     flex-shrink: 0;
     transform-origin: center center;
     perspective: 1000px;
@@ -682,9 +667,9 @@ body {
     backface-visibility: hidden;
     border-radius: var(--radius);
     overflow: hidden;
-    border: 2px solid var(--c-border);
+    border: var(--border-w) solid var(--c-border);
     box-sizing: border-box;
-    transition: border-color 0.15s;
+    transition: border-color var(--speed-fast);
 }
 
 .tile-front {
@@ -694,14 +679,13 @@ body {
 
 .tile-back {
     transform: rotateX(180deg);
-    background: #6B4E31;
-    /* Wood brown */
-    border-color: #4A331A;
+    background: var(--c-tile-back);
+    border-color: var(--c-tile-back-border);
     display: flex;
     align-items: center;
     justify-content: center;
     color: #fff;
-    font-size: 20px;
+    font-size: var(--text-md);
     font-weight: 700;
     text-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
     box-shadow: inset 0 0 16px rgba(0, 0, 0, 0.4);
@@ -729,7 +713,7 @@ body {
 }
 
 .draft-tile:focus-visible {
-    outline: 2px solid var(--c-crown);
+    outline: var(--border-w) solid var(--c-crown);
     outline-offset: 4px;
     box-shadow: 0 0 12px rgba(255, 215, 0, 0.3);
 }
@@ -809,15 +793,15 @@ body {
     height: 6px;
 }
 
-/* Meeple circle on draft tiles */
+/* Claim flag pinned to a draft tile */
 .tile-meeple {
     position: absolute;
     left: var(--flag-x, 75%);
     top: var(--flag-y, 50%);
     transform: translate(-50%, -50%) rotate(calc(-1 * var(--rotation-deg, 0deg)));
     transition: transform 0.5s cubic-bezier(0.34, 1.5, 0.64, 1);
-    width: 28px;
-    height: 28px;
+    width: var(--meeple-size);
+    height: var(--meeple-size);
     z-index: 2;
     filter: drop-shadow(2px 2px 0px rgba(0, 0, 0, 0.4));
     background-size: contain;
@@ -864,10 +848,10 @@ body {
 
 /* Meeple tokens */
 .meeple-token {
-    width: 32px;
-    height: 32px;
+    width: var(--meeple-token-size);
+    height: var(--meeple-token-size);
     flex-shrink: 0;
-    transition: transform .15s, opacity .2s, filter .2s;
+    transition: transform var(--speed-fast), opacity .2s, filter .2s;
     background-size: contain;
     background-repeat: no-repeat;
     background-position: center;
@@ -909,11 +893,11 @@ body {
     }
 }
 
-/* Meeple ghost */
+/* Meeple ghost (follows cursor during meeple drag) */
 #meeple-ghost {
     position: fixed;
-    width: 32px;
-    height: 32px;
+    width: var(--meeple-token-size);
+    height: var(--meeple-token-size);
     pointer-events: none;
     z-index: 1000;
     opacity: .85;
@@ -941,7 +925,7 @@ body {
     pointer-events: none;
     z-index: 1000;
     opacity: .85;
-    border: 2px solid var(--c-crown);
+    border: var(--border-w) solid var(--c-crown);
     border-radius: 1px;
     overflow: hidden;
     filter: drop-shadow(0 4px 16px rgba(0, 0, 0, .6));
@@ -999,7 +983,10 @@ body {
 /* ── Game over ─────────────────────────────────────────────────────────── */
 .game-over-overlay {
     position: fixed;
-    top: 0; left: 0; width: 100vw; height: 100vh;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
     background: rgba(0, 0, 0, 0.85);
     backdrop-filter: blur(8px);
     display: flex;
@@ -1013,8 +1000,15 @@ body {
 }
 
 @keyframes fadeInBg {
-    from { background: rgba(0, 0, 0, 0); backdrop-filter: blur(0px); }
-    to { background: rgba(0, 0, 0, 0.85); backdrop-filter: blur(8px); }
+    from {
+        background: rgba(0, 0, 0, 0);
+        backdrop-filter: blur(0px);
+    }
+
+    to {
+        background: rgba(0, 0, 0, 0.85);
+        backdrop-filter: blur(8px);
+    }
 }
 
 .winner-banner {
@@ -1022,7 +1016,7 @@ body {
     align-items: stretch;
     justify-content: center;
     margin-bottom: 60px;
-    filter: drop-shadow(0 10px 20px rgba(0,0,0,0.8));
+    filter: drop-shadow(0 10px 20px rgba(0, 0, 0, 0.8));
     transform-origin: top center;
     height: 80px;
 }
@@ -1038,8 +1032,15 @@ body {
 }
 
 @keyframes dropBounce {
-    0% { transform: scale(0.5) translateY(-200px); opacity: 0; }
-    100% { transform: scale(1.2) translateY(0); opacity: 1; }
+    0% {
+        transform: scale(0.5) translateY(-200px);
+        opacity: 0;
+    }
+
+    100% {
+        transform: scale(1.2) translateY(0);
+        opacity: 1;
+    }
 }
 
 .scroll-part {
@@ -1049,12 +1050,12 @@ body {
 }
 
 .scroll-part.left {
-    width: 60px;
+    width: var(--scroll-part-w);
     background-position: right center;
 }
 
 .scroll-part.right {
-    width: 60px;
+    width: var(--scroll-part-w);
     background-position: left center;
 }
 
@@ -1077,7 +1078,7 @@ body {
 
 .winner-banner.tie {
     background: var(--c-surface-alt);
-    border: 2px solid var(--c-crown);
+    border: var(--border-w) solid var(--c-crown);
     border-radius: var(--radius);
     padding: 20px 40px;
     height: auto;
@@ -1085,7 +1086,7 @@ body {
 
 .scores-container {
     display: flex;
-    gap: 80px;
+    gap: var(--scores-gap);
     margin-bottom: 60px;
 }
 
@@ -1104,10 +1105,10 @@ body {
 }
 
 .player-score .score-val {
-    font-size: 100px;
+    font-size: var(--text-score);
     font-weight: bold;
     color: var(--c-text);
-    text-shadow: 0 4px 10px rgba(0,0,0,0.5);
+    text-shadow: 0 4px 10px rgba(0, 0, 0, 0.5);
     transition: transform 0.2s;
     line-height: 1;
 }
@@ -1118,23 +1119,33 @@ body {
 }
 
 @keyframes pulseWin {
-    from { transform: scale(1); text-shadow: 0 4px 10px rgba(0,0,0,0.5); }
-    to { transform: scale(1.15); text-shadow: 0 0 30px rgba(255,215,0,0.8); }
+    from {
+        transform: scale(1);
+        text-shadow: 0 4px 10px rgba(0, 0, 0, 0.5);
+    }
+
+    to {
+        transform: scale(1.15);
+        text-shadow: 0 0 30px rgba(255, 215, 0, 0.8);
+    }
 }
 
 .play-again-btn {
     padding: 14px 32px;
-    border: 2px solid var(--c-border);
+    border: var(--border-w) solid var(--c-border);
     border-radius: var(--radius);
     background: var(--c-surface);
     color: var(--c-text);
     font-family: var(--font-main);
-    font-size: 20px;
+    font-size: var(--text-md);
     font-weight: 600;
     text-transform: uppercase;
     letter-spacing: .06em;
     cursor: pointer;
-    transition: background .15s, border-color .15s, transform .15s;
+    transition:
+        background var(--speed-fast),
+        border-color var(--speed-fast),
+        transform var(--speed-fast);
 }
 
 .play-again-btn.hidden {
@@ -1147,8 +1158,17 @@ body {
 }
 
 @keyframes fadeInBtn {
-    0% { opacity: 0; transform: translateY(20px); pointer-events: none; }
-    100% { opacity: 1; transform: translateY(0); pointer-events: all; }
+    0% {
+        opacity: 0;
+        transform: translateY(20px);
+        pointer-events: none;
+    }
+
+    100% {
+        opacity: 1;
+        transform: translateY(0);
+        pointer-events: all;
+    }
 }
 
 .play-again-btn:hover {
@@ -1211,7 +1231,7 @@ dialog.welcome-modal::backdrop {
 }
 
 .welcome-modal .modal-scroll-header h2 {
-    color: #fffdec;
+    color: var(--c-scroll-text);
     text-shadow: 3px 3px 0px #4a0d0d;
     margin: 0;
     line-height: 1;
@@ -1221,7 +1241,7 @@ dialog.welcome-modal::backdrop {
 
 .welcome-modal .modal-content-box {
     background: var(--c-surface-alt);
-    border: 2px solid var(--c-crown);
+    border: var(--border-w) solid var(--c-crown);
     border-radius: var(--radius);
     padding: 32px 48px;
     box-shadow: 0 8px 32px rgba(0, 0, 0, 0.8);
@@ -1249,7 +1269,7 @@ dialog.welcome-modal::backdrop {
     font-size: 16px;
     outline: none;
     text-align: center;
-    transition: border-color .15s;
+    transition: border-color var(--speed-fast);
 }
 
 .welcome-modal input:focus {
@@ -1337,12 +1357,10 @@ dialog.welcome-modal::backdrop {
     font-size: 2rem;
     font-family: var(--font-main);
     font-weight: 900;
-    color: #ff4444;
+    color: var(--c-discard);
     background: rgba(180, 0, 0, 0.55);
     border-radius: var(--radius);
-    border: 2px solid #ff4444;
-    z-index: 10;
-    box-shadow: 0 0 18px rgba(255, 68, 68, 0.7), inset 0 0 12px rgba(180, 0, 0, 0.4);
+    border: var(--border-w) solid var(--c-discard);
     animation: discard-overlay-fade 0.45s ease-in-out forwards;
 }
 
@@ -1380,24 +1398,24 @@ dialog.welcome-modal::backdrop {
 
     20% {
         background: rgba(200, 40, 40, 0.25);
-        color: #ff9090;
+        color: var(--c-warning-bright);
     }
 
     55% {
         background: rgba(200, 40, 40, 0.18);
-        color: #ff9090;
+        color: var(--c-warning-bright);
     }
 
     100% {
         background: rgba(180, 40, 40, 0.10);
-        color: #cc6666;
+        color: var(--c-warning);
     }
 }
 
 #message-bar.warning {
     animation: discard-msg-flash 0.6s ease-out forwards;
     background: rgba(180, 40, 40, 0.10);
-    color: #cc6666;
+    color: var(--c-warning);
 }
 
 /* ── Welcome Modal "How to Play" ─────────────────────────────────────────── */
@@ -1457,7 +1475,10 @@ dialog.welcome-modal::backdrop {
 /* ── Draw Order Animation ──────────────────────────────────────────────────── */
 .draw-order-overlay {
     position: fixed;
-    top: 0; left: 0; width: 100vw; height: 100vh;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
     background: rgba(0, 0, 0, 0.6);
     display: flex;
     flex-direction: column;
@@ -1474,22 +1495,26 @@ dialog.welcome-modal::backdrop {
 }
 
 @keyframes fadeOutBg {
-    to { opacity: 0; }
+    to {
+        opacity: 0;
+    }
 }
 
 .draw-order-container {
     background: var(--c-surface-alt);
-    border: 2px solid var(--c-crown);
+    border: var(--border-w) solid var(--c-crown);
     border-radius: var(--radius);
     padding: 32px 48px;
     text-align: center;
-    box-shadow: 0 8px 32px rgba(0,0,0,0.8);
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.8);
     transform: scale(0);
     animation: popIn 0.5s cubic-bezier(0.34, 1.5, 0.64, 1) forwards;
 }
 
 @keyframes popIn {
-    to { transform: scale(1); }
+    to {
+        transform: scale(1);
+    }
 }
 
 .draw-order-container h2 {
@@ -1517,7 +1542,10 @@ dialog.welcome-modal::backdrop {
 }
 
 @keyframes flagPop {
-    to { opacity: 1; transform: translateY(0); }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
 }
 
 .draw-order-flag {
@@ -1527,7 +1555,7 @@ dialog.welcome-modal::backdrop {
     background-repeat: no-repeat;
     background-position: center;
     image-rendering: pixelated;
-    filter: drop-shadow(2px 2px 0px rgba(0,0,0,0.5));
+    filter: drop-shadow(2px 2px 0px rgba(0, 0, 0, 0.5));
 }
 
 .draw-order-name {
