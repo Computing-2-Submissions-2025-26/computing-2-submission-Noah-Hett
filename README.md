@@ -1,38 +1,19 @@
-## Peer Review
-
-Hey there, i would really appreciate review for the main logic parts, specifically game.js but frontend help is always appreciated too!
-
-
-Sry if its a little confusing, game logic is split up into different files to make it easier to manage.
-
-domino.js is what powers the tiles that are used in the game. they appear at the bottom and can be placed on the grid
-
-Board.js defines a board - seperate so that different amounts of players can be used later
-
-game.js is the game state machine for a 2 player version
-
-scoring.js is the scoring algorithm
-
-### Playing
-there isn't really an onboarding/guide yet but you can find the rules here: https://themindcafe.com.sg/wp-content/uploads/1970/01/Kingdomino.pdf
-
-it can be a little confusing at first with the tiles and the boards but the tiles are dragged on the board when you want to place them. Enjoy :)
-
-
-
-
-
-
-
-
-
-
-
 [![Review Assignment Due Date](https://classroom.github.com/assets/deadline-readme-button-22041afd0340ce965d47ae6ef1cefeee28c7c493a6346c4f15d667ab976d596c.svg)](https://classroom.github.com/a/H6lPFq0J)
 # Computing 2 Coursework Submission.
-**CID**: [YOUR CID]
+**CID**: [02558348]
 
 This is the submission template for your Computing 2 Applications coursework submission.
+
+
+### Playing
+The game I have gone with is called Kingdomino. I've tried to stay as faithful to the original as possible, including using all the original tile combinations.
+You can find the full original rules here: https://themindcafe.com.sg/wp-content/uploads/1970/01/Kingdomino.pdf
+
+
+### AI Disclosure
+I have used tools such as Google's Antigravity (now antigravity IDE) and web AI interfaces, utilising models such as Gemini and Claude. 
+Specificaly these tools were most involved with the early research and planning stages, as well as some feature implimentation and code review. 
+This is across both the functional backend as well as frontend code.
 
 ## Checklist
 ### Install dependencies locally
