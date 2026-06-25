@@ -55,6 +55,8 @@ let render_all;
 let start_keyboard_placement;
 let start_meeple_drag;
 let start_tile_drag;
+let play_draw_order_animation;
+let show_welcome_modal;
 
 // ─── DOM refs ───────────────────────────────────────────────────────────────
 
@@ -840,38 +842,118 @@ function render_game_over() {
     if (state.phase !== PHASES.GAME_OVER) {
         return;
     }
-    if (document.querySelector(".game-over-modal")) {
+    if (document.querySelector(".game-over-overlay")) {
         return;
     }
 
     const p1 = get_player(state, "P1");
     const p2 = get_player(state, "P2");
-    const winner = (
-        p1.score > p2.score
-        ? `${p1.name} wins!`
-        : (
-            p2.score > p1.score
-            ? `${p2.name} wins!`
-            : "It's a tie!"
-        )
-    );
 
-    const modal = document.createElement("dialog");
-    modal.className = "game-over-modal";
+    let color_theme = "tie";
+    let winner_text = "It's a tie!";
+    if (p1.score > p2.score) {
+        color_theme = "red";
+        winner_text = `${p1.name} wins!`;
+    } else if (p2.score > p1.score) {
+        color_theme = "blue";
+        winner_text = `${p2.name} wins!`;
+    }
 
-    modal.innerHTML = `
-        <h2>${winner}</h2>
-        <p>${p1.name}: ${p1.score} &nbsp;—&nbsp; ${p2.name}: ${p2.score}</p>
-        <button class="play-again-btn">Play Again</button>
+    const overlay = document.createElement("div");
+    overlay.className = "game-over-overlay";
+
+    let banner_html = "";
+    if (color_theme !== "tie") {
+        banner_html = `
+            <div class="winner-banner hidden ${color_theme}">
+                <div
+                class="scroll-part left" style="background-image:
+                url('assets/art/${color_theme}-scroll-left.png')"
+                >
+                </div>
+                <div
+                class="scroll-part center" style="background-image:
+                url('assets/art/${color_theme}-scroll-centre.png')"
+                >
+                    <h2>${winner_text}</h2>
+                </div>
+                <div
+                class="scroll-part right" style="background-image:
+                url('assets/art/${color_theme}-scroll-right.png')"
+                >
+                </div>
+            </div>
+        `;
+    } else {
+        banner_html = `<div class="winner-banner tie hidden">
+                        <h2>${winner_text}</h2>
+                        </div>`;
+    }
+
+    overlay.innerHTML = `
+        ${banner_html}
+        <div class="scores-container">
+            <div class="player-score" id="score-block-p1">
+                <span class="name">${p1.name}</span>
+                <span class="score-val" id="anim-score-p1">0</span>
+            </div>
+            <div class="player-score" id="score-block-p2">
+                <span class="name">${p2.name}</span>
+                <span class="score-val" id="anim-score-p2">0</span>
+            </div>
+        </div>
+        <button class="play-again-btn hidden">Play Again</button>
     `;
 
-    document.body.appendChild(modal);
-    modal.showModal();
+    document.body.appendChild(overlay);
 
-    const play_btn = modal.querySelector(".play-again-btn");
+    let start_time = null;
+    const duration = 1500;
+    const anim_p1 = overlay.querySelector("#anim-score-p1");
+    const anim_p2 = overlay.querySelector("#anim-score-p2");
+
+    function step(timestamp) {
+        if (!start_time) {
+            start_time = timestamp;
+        }
+        const progress = Math.min((timestamp - start_time) / duration, 1);
+        const ease_out = 1 - Math.pow(1 - progress, 3);
+
+        anim_p1.textContent = Math.floor(ease_out * p1.score);
+        anim_p2.textContent = Math.floor(ease_out * p2.score);
+
+        if (progress < 1) {
+            window.requestAnimationFrame(step);
+        } else {
+            anim_p1.textContent = p1.score;
+            anim_p2.textContent = p2.score;
+
+            const banner = overlay.querySelector(".winner-banner");
+            const btn = overlay.querySelector(".play-again-btn");
+
+            banner.classList.remove("hidden");
+            banner.classList.add("drop-in");
+            btn.classList.remove("hidden");
+            btn.classList.add("fade-in");
+
+            const score_block_p1 = overlay.querySelector("#score-block-p1");
+            const score_block_p2 = overlay.querySelector("#score-block-p2");
+
+            if (p1.score > p2.score) {
+                score_block_p1.classList.add("winner-pulse");
+            } else if (p2.score > p1.score) {
+                score_block_p2.classList.add("winner-pulse");
+            } else {
+                score_block_p1.classList.add("winner-pulse");
+                score_block_p2.classList.add("winner-pulse");
+            }
+        }
+    }
+    window.requestAnimationFrame(step);
+
+    const play_btn = overlay.querySelector(".play-again-btn");
     play_btn.addEventListener("click", function () {
-        modal.close();
-        modal.remove();
+        overlay.remove();
 
         state = create_game(2);
         rotation = 0;
@@ -880,6 +962,7 @@ function render_game_over() {
         last_message = "";
 
         render_all();
+        play_draw_order_animation();
     });
 }
 
@@ -1154,7 +1237,56 @@ window.setState = function (new_state) {
 
 render_all();
 
-function show_welcome_modal() {
+play_draw_order_animation = function () {
+    const overlay = document.createElement("div");
+    overlay.className = "draw-order-overlay";
+    const p_data = state.meeple_order.map(function (pid) {
+        return get_player(state, pid);
+    });
+
+    const flags_html = p_data.map(function (p, i) {
+        const color_name = (
+            p.id === "P1"
+            ? "red"
+            : "blue"
+        );
+        return `
+        <div class="draw-order-flag-wrap" style="animation-delay: ${i * 0.4}s">
+            <div
+            class="draw-order-flag"
+            style="background-image:
+            url('assets/art/claim-flag-${color_name}.png')"
+            >
+            </div>
+                <span
+                class="draw-order-name" style="color: ${p.color}"
+                >
+                    ${p.name}
+                </span>
+        </div>
+        `;
+    }).join("");
+
+    overlay.innerHTML = `
+        <div class="draw-order-container">
+            <h2>Initial Draw Order</h2>
+            <div class="draw-order-flags">
+                ${flags_html}
+            </div>
+        </div>
+    `;
+
+    document.body.appendChild(overlay);
+
+    setTimeout(function () {
+        overlay.classList.add("fade-out");
+        setTimeout(function () {
+            overlay.remove();
+        }, 500);
+    }, 2800);
+};
+
+show_welcome_modal = function () {
     const modal = document.createElement("dialog");
     modal.className = "game-over-modal welcome-modal";
 
@@ -1178,6 +1310,29 @@ function show_welcome_modal() {
                 <input type="text" id="p2-name"
                     placeholder="Player 2 Name" value="" />
             </div>
+            <div class="how-to-play-section">
+                <button class="how-to-btn" id="how-to-btn">How to Play?</button>
+                <div class="how-to-content hidden" id="how-to-content">
+                    <p>
+                        <strong>
+                            Claim your tiles
+                        </strong>
+                        to add to your board(picking tiles decides turn order!)
+                    </p>
+                    <p>
+                        <strong>
+                            Build out your kingdom
+                        </strong>
+                        from your castle, to a 5x5 grid max.
+                    </p>
+                    <p>
+                        <strong>
+                            Connect land types
+                        </strong>
+                        together and add crowns to those lands to gain points!
+                    </p>
+                </div>
+            </div>
             <button class="play-again-btn" id="start-game-btn">
                 Start Game
             </button>
@@ -1186,6 +1341,12 @@ function show_welcome_modal() {
 
     document.body.appendChild(modal);
     modal.showModal();
+
+    const how_to_btn = modal.querySelector("#how-to-btn");
+    const how_to_content = modal.querySelector("#how-to-content");
+    how_to_btn.addEventListener("click", function () {
+        how_to_content.classList.toggle("hidden");
+    });
 
     const start_btn = modal.querySelector("#start-game-btn");
     start_btn.addEventListener("click", function () {
@@ -1212,8 +1373,9 @@ function show_welcome_modal() {
         last_rendered_round = 0;
         last_message = "";
         render_all();
+        play_draw_order_animation();
     });
-}
+};
 
 show_welcome_modal();
 render_all();
