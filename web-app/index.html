@@ -21,8 +21,12 @@
     <!-- Board area: two player boards side-by-side -->
     <section id="board-area">
         <div class="player-panel" id="player-P1">
-            <div class="panel-header">
-                <span class="player-name">PLAYER 1</span>
+            <div class="panel-header scroll-header">
+                <div class="scroll-edge left"></div>
+                <div class="scroll-body">
+                    <span class="player-name">PLAYER 1</span>
+                </div>
+                <div class="scroll-edge right"></div>
             </div>
             <div class="board-frame">
                 <div class="game-board" id="board-P1"></div>
@@ -30,8 +34,12 @@
         </div>
 
         <div class="player-panel" id="player-P2">
-            <div class="panel-header">
-                <span class="player-name">PLAYER 2</span>
+            <div class="panel-header scroll-header">
+                <div class="scroll-edge left"></div>
+                <div class="scroll-body">
+                    <span class="player-name">PLAYER 2</span>
+                </div>
+                <div class="scroll-edge right"></div>
             </div>
             <div class="board-frame">
                 <div class="game-board" id="board-P2"></div>
@@ -41,15 +49,6 @@
 
     <!-- Bottom strip: controls + current tiles | next tiles -->
     <section id="draft-strip">
-        <div id="strip-controls">
-            <div id="turn-indicator">
-                <span id="turn-player"></span>
-                <span id="turn-action"></span>
-            </div>
-            <button id="btn-rotate" title="Rotate domino (R)">ROTATE [R]</button>
-            <div id="message-bar" aria-live="polite"></div>
-        </div>
-
         <div id="draft-row">
             <div class="line-group" id="current-group">
                 <span class="line-label">Current</span>
@@ -60,6 +59,15 @@
                 <span class="line-label">Next</span>
                 <div id="next-line" class="tile-row"></div>
             </div>
+        </div>
+
+        <div id="strip-controls">
+            <div id="turn-indicator">
+                <span id="turn-player"></span>
+                <span id="turn-action"></span>
+            </div>
+            <button id="btn-rotate" title="Rotate domino (R)">ROTATE [R]</button>
+            <div id="message-bar" aria-live="polite"></div>
         </div>
     </section>
 

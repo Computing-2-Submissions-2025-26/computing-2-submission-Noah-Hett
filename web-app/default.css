@@ -1,7 +1,4 @@
-/* ─── Kingdomino 2-Player — Responsive Layout ────────────────────────────
-   Boards fill available space, draft tiles sit in a bottom bar with
-   meeples centred between current and next tile groups.
-   ──────────────────────────────────────────────────────────────────────── */
+/* ─── Kingdomino 2-Player — Responsive Layout ──────────────────────────── */
 
 *,
 *::before,
@@ -58,14 +55,14 @@
     --c-invalid: rgba(233, 69, 96, 0.3);
 
     /* ── Text sizes ── */
-    --text-sm: 10px;
+    --text-sm: 15px;
     --text-md: 20px;
     --text-lg: 40px;
 
     /* ── Layout tuning knobs ──
        Change any of these and --cell recalculates automatically. */
-    --page-pad: 24px;
-    --board-gap: 40px;
+    --page-pad: 60px;
+    --board-gap: 50px;
     --board-pad: 4px;
     --header-h: 64px;
     --strip-h: 300px;
@@ -139,8 +136,6 @@ body {
 
 .player-panel.inactive {
     opacity: .45;
-    /* Delayed, slower fade-out when becoming inactive */
-    transition: opacity .4s ease 0.75s;
 }
 
 .panel-header {
@@ -150,10 +145,77 @@ body {
     padding: 0 4px;
 }
 
+/* Scroll headers for Player 1 and Player 2 */
+.panel-header.scroll-header {
+    display: flex;
+    align-self: flex-start;
+    /* Wrap banner to the text length */
+    align-items: stretch;
+    height: 40px;
+    padding: 0;
+    margin-bottom: 4px;
+    image-rendering: pixelated;
+    filter: drop-shadow(3px 3px 0 #3c3c3c);
+}
+
+.panel-header.scroll-header .scroll-edge {
+    width: 40px;
+    flex-shrink: 0;
+}
+
+.panel-header.scroll-header .scroll-body {
+    flex-grow: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0 4px;
+    /* small side padding to balance the scroll rolls */
+}
+
 .player-name {
     font-size: var(--text-md);
     text-transform: uppercase;
     padding-bottom: 5px;
+}
+
+.panel-header.scroll-header .player-name {
+    color: #fffdec;
+    padding-bottom: 0;
+    line-height: 1;
+}
+
+/* Player 1 (Red Scroll) */
+#player-P1 .panel-header.scroll-header .scroll-edge.left {
+    background: url('assets/art/red-scroll-left.png') no-repeat center / contain;
+}
+
+#player-P1 .panel-header.scroll-header .scroll-edge.right {
+    background: url('assets/art/red-scroll-right.png') no-repeat center / contain;
+}
+
+#player-P1 .panel-header.scroll-header .scroll-body {
+    background: url('assets/art/red-scroll-centre.png') repeat-x center / contain;
+}
+
+#player-P1 .panel-header.scroll-header .player-name {
+    text-shadow: 1px 1px 0px #4a0d0d;
+}
+
+/* Player 2 (Blue Scroll) */
+#player-P2 .panel-header.scroll-header .scroll-edge.left {
+    background: url('assets/art/blue-scroll-left.png') no-repeat center / contain;
+}
+
+#player-P2 .panel-header.scroll-header .scroll-edge.right {
+    background: url('assets/art/blue-scroll-right.png') no-repeat center / contain;
+}
+
+#player-P2 .panel-header.scroll-header .scroll-body {
+    background: url('assets/art/blue-scroll-centre.png') repeat-x center / contain;
+}
+
+#player-P2 .panel-header.scroll-header .player-name {
+    text-shadow: 1px 1px 0px #0c2040;
 }
 
 #player-P1 .player-name {
@@ -175,8 +237,14 @@ body {
     border: 2px dashed var(--c-border);
     border-radius: var(--radius);
     padding: var(--board-pad);
-    transition: border-color .25s ease .75s, width .35s ease .3s, height .35s ease .3s, margin .35s ease .3s;
+    transition: border-color .25s ease .75s, width .35s ease .3s, height .35s ease .3s, margin .35s ease .3s, outline .15s;
     overflow: hidden;
+    outline: 2px solid transparent;
+}
+
+.board-frame:focus-visible {
+    outline: 2px solid var(--c-crown);
+    box-shadow: 0 0 16px rgba(255, 215, 0, 0.4);
 }
 
 .player-panel.active .board-frame {
@@ -322,9 +390,16 @@ body {
 }
 
 .cell[data-terrain="castle"] {
-    background-image: url('assets/art/castle.png');
     background-size: cover;
     image-rendering: pixelated;
+}
+
+#board-P1 .cell[data-terrain="castle"] {
+    background-image: url('assets/art/castle-red.png');
+}
+
+#board-P2 .cell[data-terrain="castle"] {
+    background-image: url('assets/art/castle-blue.png');
 }
 
 /* ── Per-terrain drop shadows (2×2 solid offset) ──────────────────────── */
@@ -360,11 +435,13 @@ body {
 .cell.preview-valid {
     border: 2px solid var(--c-grassland);
     background: rgba(126, 200, 80, .15);
+    background-image: none !important;
 }
 
 .cell.preview-invalid {
     border: 2px solid rgb(233, 69, 96);
     background: rgba(233, 69, 96, .1);
+    background-image: none !important;
 }
 
 /* Remove the shared inner border so both cells read as one tile */
@@ -443,7 +520,7 @@ body {
 /* ── Draft strip (bottom) ──────────────────────────────────────────────── */
 #draft-strip {
     flex-shrink: 0;
-    padding: 8px var(--page-pad) 12px;
+    padding: 18px 80px 12px;
     display: flex;
     flex-direction: column;
     gap: 8px;
@@ -455,6 +532,15 @@ body {
     display: flex;
     align-items: center;
     gap: 12px;
+    width: 100%;
+    margin-top: 12px;
+    font-size: var(--text-sm);
+
+}
+
+#message-bar {
+    margin-left: auto;
+
 }
 
 #turn-indicator {
@@ -468,15 +554,12 @@ body {
 }
 
 #turn-player {
-    font-size: var(--text-md);
     font-weight: 700;
 }
 
 #turn-action {
-    font-size: var(--text-md);
     color: var(--c-text-muted);
     text-transform: uppercase;
-    letter-spacing: .06em;
 }
 
 #btn-rotate {
@@ -486,7 +569,7 @@ body {
     background: var(--c-surface-alt);
     color: var(--c-text-muted);
     font-family: var(--font-main);
-    font-size: var(--text-md);
+    font-size: inherit;
     font-weight: 600;
     cursor: pointer;
     transition: background .15s, border-color .15s;
@@ -497,12 +580,11 @@ body {
     border-color: var(--c-accent);
 }
 
-/* Draft row — current | meeples | next */
 #draft-row {
     display: flex;
     align-items: center;
-    justify-content: center;
-    gap: 24px;
+    justify-content: space-between;
+    width: 100%;
 }
 
 .line-group {
@@ -521,7 +603,7 @@ body {
 
 .tile-row {
     display: flex;
-    gap: 8px;
+    gap: 20px;
     /* Tall enough for a vertically-rotated draft tile */
     min-height: calc(var(--draft-cell) * 2 + 8px);
     align-items: center;
@@ -529,10 +611,22 @@ body {
 
 /* Fixed-size tile slot placeholders */
 .draft-tile-slot {
-    width: calc(var(--draft-cell) * 2 + 4px);
-    height: calc(var(--draft-cell) * 2 + 4px);
-    border-radius: 4px;
+    width: calc(var(--draft-cell) * 2 + 20px);
+    height: calc(var(--draft-cell) * 2 + 20px);
+    border-radius: 1px;
     flex-shrink: 0;
+    background-image: url('assets/art/tile-slot.png');
+    background-size: cover;
+    image-rendering: pixelated;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-sizing: border-box;
+}
+
+.draft-tile-slot.highlight-slot {
+    border: 4px solid #a3a3a3;
+    /* Lighter stone-ish grey */
 }
 
 
@@ -540,18 +634,77 @@ body {
     border: 2px dashed var(--c-border);
 }
 
-/* Draft tiles — horizontal domino pieces at reduced scale */
+/* Draft tiles — 3D flipping container */
 .draft-tile {
-    display: flex;
-    flex-direction: row;
+    position: relative;
+    cursor: grab;
+    transition: transform 0.25s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.15s;
+    flex-shrink: 0;
+    transform-origin: center center;
+    perspective: 1000px;
+    width: calc(var(--draft-cell) * 2);
+    height: var(--draft-cell);
+}
+
+@keyframes slideFromNext {
+    0% {
+        transform: translateX(var(--slide-dist, 0px));
+    }
+
+    100% {
+        transform: translateX(0);
+    }
+}
+
+.draft-tile.sliding {
+    animation: slideFromNext 0.5s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+}
+
+.tile-inner {
+    width: 100%;
+    height: 100%;
+    position: relative;
+    transform-style: preserve-3d;
+    transition: transform 0.6s cubic-bezier(0.34, 1.5, 0.64, 1);
+}
+
+.draft-tile.face-down .tile-inner {
+    transform: rotateX(180deg);
+}
+
+.tile-front,
+.tile-back {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    backface-visibility: hidden;
     border-radius: var(--radius);
     overflow: hidden;
     border: 2px solid var(--c-border);
-    position: relative;
-    cursor: grab;
-    transition: transform 0.25s cubic-bezier(0.4, 0, 0.2, 1), border-color 0.15s, opacity 0.15s;
-    flex-shrink: 0;
-    transform-origin: center center;
+    box-sizing: border-box;
+    transition: border-color 0.15s;
+}
+
+.tile-front {
+    display: flex;
+    flex-direction: row;
+}
+
+.tile-back {
+    transform: rotateX(180deg);
+    background: #6B4E31;
+    /* Wood brown */
+    border-color: #4A331A;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #fff;
+    font-size: 20px;
+    font-weight: 700;
+    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
+    box-shadow: inset 0 0 16px rgba(0, 0, 0, 0.4);
 }
 
 .draft-tile[data-rotation="0"] {
@@ -570,23 +723,34 @@ body {
     transform: rotate(var(--rotation-deg, 270deg));
 }
 
-.draft-tile:hover {
+#next-line .draft-tile:hover,
+#current-line .draft-tile.highlight:hover {
     transform: rotate(var(--rotation-deg, 0deg)) scale(1.06);
 }
 
-.draft-tile[data-rotation="0"]:hover {
+.draft-tile:focus-visible {
+    outline: 2px solid var(--c-crown);
+    outline-offset: 4px;
+    box-shadow: 0 0 12px rgba(255, 215, 0, 0.3);
+}
+
+#next-line .draft-tile[data-rotation="0"]:hover,
+#current-line .draft-tile.highlight[data-rotation="0"]:hover {
     transform: rotate(var(--rotation-deg, 0deg)) scale(1.06);
 }
 
-.draft-tile[data-rotation="1"]:hover {
+#next-line .draft-tile[data-rotation="1"]:hover,
+#current-line .draft-tile.highlight[data-rotation="1"]:hover {
     transform: rotate(var(--rotation-deg, 90deg)) scale(1.06);
 }
 
-.draft-tile[data-rotation="2"]:hover {
+#next-line .draft-tile[data-rotation="2"]:hover,
+#current-line .draft-tile.highlight[data-rotation="2"]:hover {
     transform: rotate(var(--rotation-deg, 180deg)) scale(1.06);
 }
 
-.draft-tile[data-rotation="3"]:hover {
+#next-line .draft-tile[data-rotation="3"]:hover,
+#current-line .draft-tile.highlight[data-rotation="3"]:hover {
     transform: rotate(var(--rotation-deg, 270deg)) scale(1.06);
 }
 
@@ -594,12 +758,11 @@ body {
     cursor: grabbing;
 }
 
-.draft-tile.available {
-    border-color: rgba(126, 200, 80, .5);
-}
-
-.draft-tile.available:hover {
-    border-color: var(--c-grassland);
+#next-line .draft-tile:hover .tile-front,
+#next-line .draft-tile:hover .tile-back,
+#current-line .draft-tile.highlight:hover .tile-front,
+#current-line .draft-tile.highlight:hover .tile-back {
+    border-color: var(--c-accent-muted);
 }
 
 .draft-tile.claimed {
@@ -607,12 +770,14 @@ body {
     pointer-events: none;
 }
 
-.draft-tile.highlight {
+.draft-tile.highlight .tile-front,
+.draft-tile.highlight .tile-back {
     border-color: var(--c-crown);
     box-shadow: 0 0 10px rgba(255, 215, 0, .25);
 }
 
-.draft-tile.drop-target {
+.draft-tile.drop-target .tile-front,
+.draft-tile.drop-target .tile-back {
     border-color: var(--c-crown);
     box-shadow: 0 0 12px rgba(255, 215, 0, .3);
 }
@@ -647,22 +812,26 @@ body {
 /* Meeple circle on draft tiles */
 .tile-meeple {
     position: absolute;
-    right: 4px;
-    top: 50%;
-    transform: translateY(-50%);
-    width: 18px;
-    height: 18px;
-    border-radius: 50%;
-    border: 2px solid rgba(255, 255, 255, .5);
+    left: var(--flag-x, 75%);
+    top: var(--flag-y, 50%);
+    transform: translate(-50%, -50%) rotate(calc(-1 * var(--rotation-deg, 0deg)));
+    transition: transform 0.5s cubic-bezier(0.34, 1.5, 0.64, 1);
+    width: 28px;
+    height: 28px;
     z-index: 2;
+    filter: drop-shadow(2px 2px 0px rgba(0, 0, 0, 0.4));
+    background-size: contain;
+    background-repeat: no-repeat;
+    background-position: center;
+    image-rendering: pixelated;
 }
 
 .tile-meeple[data-player="P1"] {
-    background: var(--c-p1);
+    background-image: url('assets/art/claim-flag-red.png');
 }
 
 .tile-meeple[data-player="P2"] {
-    background: var(--c-p2);
+    background-image: url('assets/art/claim-flag-blue.png');
 }
 
 /* ── Dimming during off-phases ──────────────────────────── */
@@ -671,9 +840,7 @@ body {
     pointer-events: none;
 }
 
-.line-group.dimmed .draft-tile-slot {
-    opacity: 0.3;
-}
+
 
 /* ── Meeple zone (in bottom bar) ───────────────────────────────────────── */
 #meeple-zone {
@@ -697,26 +864,28 @@ body {
 
 /* Meeple tokens */
 .meeple-token {
-    width: 28px;
-    height: 28px;
-    border-radius: 50%;
-    border: 3px solid rgba(255, 255, 255, .25);
+    width: 32px;
+    height: 32px;
     flex-shrink: 0;
-    transition: transform .15s, opacity .2s, box-shadow .2s;
+    transition: transform .15s, opacity .2s, filter .2s;
+    background-size: contain;
+    background-repeat: no-repeat;
+    background-position: center;
+    image-rendering: pixelated;
 }
 
 #meeple-P1 {
-    background: var(--c-p1);
+    background-image: url('assets/art/claim-flag-red.png');
 }
 
 #meeple-P2 {
-    background: var(--c-p2);
+    background-image: url('assets/art/claim-flag-blue.png');
 }
 
 .meeple-token.active-meeple {
     cursor: grab;
-    box-shadow: 0 0 10px rgba(255, 255, 255, .25);
-    animation: pulse 1.5s ease-in-out infinite;
+    filter: drop-shadow(0 0 8px rgba(255, 255, 255, .5));
+    animation: pulse-flag 1.5s ease-in-out infinite;
 }
 
 .meeple-token.active-meeple:hover {
@@ -728,36 +897,39 @@ body {
     pointer-events: none;
 }
 
-@keyframes pulse {
+@keyframes pulse-flag {
 
     0%,
     100% {
-        box-shadow: 0 0 6px rgba(255, 255, 255, .15);
+        filter: drop-shadow(0 0 4px rgba(255, 255, 255, .3));
     }
 
     50% {
-        box-shadow: 0 0 16px rgba(255, 255, 255, .4);
+        filter: drop-shadow(0 0 12px rgba(255, 255, 255, .8));
     }
 }
 
 /* Meeple ghost */
 #meeple-ghost {
     position: fixed;
-    width: 28px;
-    height: 28px;
-    border-radius: 50%;
-    border: 3px solid rgba(255, 255, 255, .5);
+    width: 32px;
+    height: 32px;
     pointer-events: none;
     z-index: 1000;
     opacity: .85;
+    background-size: contain;
+    background-repeat: no-repeat;
+    background-position: center;
+    image-rendering: pixelated;
+    filter: drop-shadow(2px 2px 0px rgba(0, 0, 0, 0.85));
 }
 
 #meeple-ghost[data-player="P1"] {
-    background: var(--c-p1);
+    background-image: url('assets/art/claim-flag-red.png');
 }
 
 #meeple-ghost[data-player="P2"] {
-    background: var(--c-p2);
+    background-image: url('assets/art/claim-flag-blue.png');
 }
 
 /* ── Tile ghost (follows cursor during drag) ───────────────────────────── */
@@ -808,7 +980,7 @@ body {
     min-height: 24px;
     padding: 4px 10px;
     border-radius: var(--radius);
-    font-size: var(--text-md);
+    font-size: var(--text-sm);
     line-height: 1.4;
     background: transparent;
     color: var(--c-text-muted);
@@ -875,15 +1047,79 @@ body {
     color: var(--c-text);
 }
 
-.welcome-modal h2 {
-    margin-bottom: 24px;
+/* Split Welcome Modal styling */
+dialog.welcome-modal {
+    background: transparent;
+    border: none;
+    box-shadow: none;
+    padding: 0;
+    overflow: visible;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 16px;
+    max-width: 400px;
+    width: 90%;
+}
+
+.welcome-modal .modal-scroll-header {
+    display: flex;
+    align-self: center;
+    align-items: stretch;
+    height: 64px;
+    image-rendering: pixelated;
+    filter: drop-shadow(4px 4px 0 #1e1e1e);
+}
+
+.welcome-modal .modal-scroll-header .scroll-edge {
+    width: 64px;
+    flex-shrink: 0;
+}
+
+.welcome-modal .modal-scroll-header .scroll-edge.left {
+    background: url('assets/art/red-scroll-left.png') no-repeat center / contain;
+}
+
+.welcome-modal .modal-scroll-header .scroll-edge.right {
+    background: url('assets/art/red-scroll-right.png') no-repeat center / contain;
+}
+
+.welcome-modal .modal-scroll-header .scroll-body {
+    flex-grow: 1;
+    background: url('assets/art/red-scroll-centre.png') repeat-x center / contain;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0 12px;
+}
+
+.welcome-modal .modal-scroll-header h2 {
+    color: #fffdec;
+    text-shadow: 3px 3px 0px #4a0d0d;
+    margin: 0;
+    line-height: 1;
+    font-size: 28px;
+    white-space: nowrap;
+}
+
+.welcome-modal .modal-content-box {
+    background: var(--c-surface-alt);
+    border: 2px solid var(--c-crown);
+    border-radius: var(--radius);
+    padding: 32px 48px;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.8);
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    width: 100%;
+    box-sizing: border-box;
 }
 
 .welcome-modal .name-inputs {
     display: flex;
     flex-direction: column;
     gap: 16px;
-    margin-bottom: 32px;
+    margin-bottom: 24px;
 }
 
 .welcome-modal input {

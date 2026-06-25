@@ -532,7 +532,7 @@ describe("Board module", function () {
             const d = test_domino(1, "forest", 0, "wheat", 0);
             assert.throws(
                 () => place_domino(board, d, 0, 0, 0),
-                /Invalid placement/
+                /Invalid\splacement/
             );
         });
 
